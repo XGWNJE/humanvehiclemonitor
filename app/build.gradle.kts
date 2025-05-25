@@ -5,13 +5,13 @@ plugins {
 }
 
 android {
-    namespace = "com.example.humanvehiclemonitor"
-    compileSdk = 34
+    namespace = "com.xgnwje.humanvehiclemonitor"
+    compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.humanvehiclemonitor"
+        applicationId = "com.xgwnje.humanvehiclemonitor"
         minSdk = 24 // As per your plan, for low-end devices and MediaPipe requirements
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
@@ -40,15 +40,15 @@ android {
     buildFeatures {
         compose = true
     }
-    // composeOptions { // This block is removed
-    //     kotlinCompilerExtensionVersion = "1.5.14"
+    // composeOptions { // This block is removed as it's typically inferred or set globally
+    //     kotlinCompilerExtensionVersion = "1.5.14" // Ensure this matches your Kotlin and Compose versions if re-enabled
     // }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
-    // Required for MediaPipe Tasks Vision to load models from assets
+    // Required for TFLite models loaded from assets
     aaptOptions {
         noCompress += "tflite"
     }
@@ -63,6 +63,8 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.0")
     val composeBom = platform("androidx.compose:compose-bom:2024.05.00")
     implementation(composeBom)
+    implementation("androidx.compose.material:material-icons-core") // 用于 Settings, PlayArrow 等
+    implementation("androidx.compose.material:material-icons-extended") // 用于 CameraAlt 等更多图标
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
@@ -71,15 +73,17 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     // CameraX
-    val cameraxVersion = "1.3.3" // Check for the latest stable version
+    val cameraxVersion = "1.3.3" // 检查最新的稳定版本
     implementation("androidx.camera:camera-core:${cameraxVersion}")
     implementation("androidx.camera:camera-camera2:${cameraxVersion}")
     implementation("androidx.camera:camera-lifecycle:${cameraxVersion}")
-    implementation("androidx.camera:camera-view:${cameraxVersion}") // For PreviewView if needed with AndroidView
+    implementation("androidx.camera:camera-view:${cameraxVersion}") // 如果在 AndroidView 中需要 PreviewView
 
-    // MediaPipe Tasks Vision
-    implementation("com.google.mediapipe:tasks-vision:0.10.14") // Changed from tasks-vision-platform
-
+    // TensorFlow Lite
+    implementation("org.tensorflow:tensorflow-lite-task-vision:0.4.4") // TensorFlow Lite Task Library for Vision
+    // 使用 GPU Delegate Plugin 来确保所有必要的本地库被包含
+    implementation("org.tensorflow:tensorflow-lite-gpu-delegate-plugin:0.4.4")
+    // implementation("org.tensorflow:tensorflow-lite-gpu:2.16.1") // 这个会被上面的 plugin 依赖自动引入，通常不需要单独声明
 
     // Kotlin Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
