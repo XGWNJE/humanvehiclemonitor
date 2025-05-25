@@ -17,7 +17,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn // 新增导入
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
@@ -85,13 +87,14 @@ fun StatusAndControlsView(
             modifier = Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.Bottom
+                .padding(horizontal = 12.dp, vertical = 8.dp), // 调整边距
+            verticalAlignment = Alignment.Bottom // 整体内容底部对齐
         ) {
+            // 左侧状态信息区域，占据剩余空间
             Box(
                 modifier = Modifier
-                    .weight(0.6f) // 给状态文本更多空间
-                    .padding(end = 8.dp)
+                    .weight(1f) // 让状态文本区域填充按钮之外的可用空间
+                    .padding(end = 12.dp) // 与按钮列的间距
             ) {
                 Text(
                     text = combinedStatusText,
@@ -99,35 +102,37 @@ fun StatusAndControlsView(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .background(
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f), // 略微增加不透明度
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
                             shape = RoundedCornerShape(8.dp)
                         )
                         .padding(horizontal = 10.dp, vertical = 6.dp)
-                        .align(Alignment.BottomStart),
+                        .align(Alignment.BottomStart), // 文本框在自己的区域内底部左对齐
                     lineHeight = 12.sp
                 )
             }
 
+            // 右侧控制按钮区域，宽度自适应内容
             Column(
-                modifier = Modifier
-                    .weight(0.4f)
-                    .fillMaxHeight(),
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.Bottom
+                modifier = Modifier.wrapContentWidth(), // 列的宽度由其内容决定
+                horizontalAlignment = Alignment.End, // 按钮在列内右对齐
+                verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.Bottom) // 按钮从底部开始排列，带间距
             ) {
+                val landscapeButtonModifier = Modifier
+                    .widthIn(min = 130.dp, max = 180.dp) // 给按钮一个合理的宽度范围
+                    .defaultMinSize(minHeight = buttonMinHeight)
+
                 FilledTonalButton(
                     onClick = onShowSettingsDialog,
-                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = buttonMinHeight),
+                    modifier = landscapeButtonModifier,
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Icon(Icons.Filled.Settings, contentDescription = "调整参数", modifier = Modifier.size(ButtonDefaults.IconSize))
                     Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                     Text("调参", fontSize = 14.sp)
                 }
-                Spacer(modifier = Modifier.height(8.dp))
                 Button(
                     onClick = onToggleMonitoring,
-                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = buttonMinHeight),
+                    modifier = landscapeButtonModifier,
                     shape = RoundedCornerShape(12.dp),
                     colors = if (isMonitoringActive) ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error) else ButtonDefaults.buttonColors()
                 ) {
@@ -135,10 +140,9 @@ fun StatusAndControlsView(
                     Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                     Text(monitorButtonText, fontSize = 14.sp)
                 }
-                Spacer(modifier = Modifier.height(8.dp))
                 OutlinedButton(
                     onClick = onTogglePreview,
-                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = buttonMinHeight),
+                    modifier = landscapeButtonModifier,
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Icon(previewButtonIcon, contentDescription = previewButtonText, modifier = Modifier.size(ButtonDefaults.IconSize))
@@ -147,7 +151,7 @@ fun StatusAndControlsView(
                 }
             }
         }
-    } else { // 竖屏 UI
+    } else { // 竖屏 UI (保持之前的设计)
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -162,7 +166,7 @@ fun StatusAndControlsView(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f), // 略微增加不透明度
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f),
                         shape = RoundedCornerShape(12.dp)
                     )
                     .padding(horizontal = 12.dp, vertical = 8.dp),
