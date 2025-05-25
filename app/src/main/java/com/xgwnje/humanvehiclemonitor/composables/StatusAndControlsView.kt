@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
@@ -51,8 +52,10 @@ fun StatusAndControlsView(
     currentMaxResultsValue: Int,
     currentDelegateValue: Int,
     currentDetectionIntervalMillisValue: Long,
-    isPreviewEnabled: Boolean, // 新增：接收预览状态
-    onTogglePreview: () -> Unit, // 新增：切换预览的回调
+    isPreviewEnabled: Boolean,
+    isMonitoringActive: Boolean,
+    onTogglePreview: () -> Unit,
+    onToggleMonitoring: () -> Unit,
     onShowSettingsDialog: () -> Unit,
     mainScreenTag: String
 ) {
@@ -62,13 +65,19 @@ fun StatusAndControlsView(
 
     val delegateString = if (currentDelegateValue == ObjectDetectorHelper.DELEGATE_CPU) "CPU" else "GPU"
     val intervalString = "${currentDetectionIntervalMillisValue}ms"
-    val combinedStatusText = if (detectionError != null) "错误: $detectionError"
-    else "$currentStatusText (${inferenceTime}ms)\n" +
-            "T: ${df.format(currentThresholdValue)} M: $currentMaxResultsValue D: $delegateString I: $intervalString"
+
+    val baseStatus = if (detectionError != null) "错误: $detectionError" else currentStatusText
+    val inferenceDisplay = if (detectionError == null && isMonitoringActive) " (${inferenceTime}ms)" else ""
+    val paramsDisplay = "\nT: ${df.format(currentThresholdValue)} M: $currentMaxResultsValue D: $delegateString I: $intervalString"
+    val combinedStatusText = "$baseStatus$inferenceDisplay$paramsDisplay"
+
 
     val buttonMinHeight = 48.dp
     val previewButtonText = if (isPreviewEnabled) "关闭预览" else "开启预览"
     val previewButtonIcon = if (isPreviewEnabled) Icons.Filled.VisibilityOff else Icons.Filled.Visibility
+
+    val monitorButtonText = if (isMonitoringActive) "停止监控" else "开始监控"
+    val monitorButtonIcon = if (isMonitoringActive) Icons.Filled.Stop else Icons.Filled.PlayArrow
 
 
     if (isLandscape) {
@@ -81,7 +90,7 @@ fun StatusAndControlsView(
         ) {
             Box(
                 modifier = Modifier
-                    .weight(0.6f)
+                    .weight(0.6f) // 给状态文本更多空间
                     .padding(end = 8.dp)
             ) {
                 Text(
@@ -90,7 +99,7 @@ fun StatusAndControlsView(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .background(
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f), // 略微增加不透明度
                             shape = RoundedCornerShape(8.dp)
                         )
                         .padding(horizontal = 10.dp, vertical = 6.dp)
@@ -117,17 +126,18 @@ fun StatusAndControlsView(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(
-                    onClick = { Log.d(mainScreenTag, "按钮点击: 开始监控 (TFLite)") },
+                    onClick = onToggleMonitoring,
                     modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = buttonMinHeight),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    colors = if (isMonitoringActive) ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error) else ButtonDefaults.buttonColors()
                 ) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = "开始监控", modifier = Modifier.size(ButtonDefaults.IconSize))
+                    Icon(monitorButtonIcon, contentDescription = monitorButtonText, modifier = Modifier.size(ButtonDefaults.IconSize))
                     Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                    Text("开始监控", fontSize = 14.sp)
+                    Text(monitorButtonText, fontSize = 14.sp)
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedButton(
-                    onClick = onTogglePreview, // 绑定切换预览逻辑
+                    onClick = onTogglePreview,
                     modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = buttonMinHeight),
                     shape = RoundedCornerShape(12.dp)
                 ) {
@@ -152,7 +162,7 @@ fun StatusAndControlsView(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f), // 略微增加不透明度
                         shape = RoundedCornerShape(12.dp)
                     )
                     .padding(horizontal = 12.dp, vertical = 8.dp),
@@ -177,7 +187,7 @@ fun StatusAndControlsView(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 OutlinedButton(
-                    onClick = onTogglePreview, // 绑定切换预览逻辑
+                    onClick = onTogglePreview,
                     modifier = Modifier.weight(1f).defaultMinSize(minHeight = buttonMinHeight),
                     shape = RoundedCornerShape(16.dp)
                 ) {
@@ -186,13 +196,14 @@ fun StatusAndControlsView(
                     Text(previewButtonText, fontSize = 15.sp)
                 }
                 Button(
-                    onClick = { Log.d(mainScreenTag, "按钮点击: 开始监控 (TFLite)") },
+                    onClick = onToggleMonitoring,
                     modifier = Modifier.weight(1f).defaultMinSize(minHeight = buttonMinHeight),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(16.dp),
+                    colors = if (isMonitoringActive) ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error) else ButtonDefaults.buttonColors()
                 ) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = "开始监控", modifier = Modifier.size(ButtonDefaults.IconSize))
+                    Icon(monitorButtonIcon, contentDescription = monitorButtonText, modifier = Modifier.size(ButtonDefaults.IconSize))
                     Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                    Text("开始监控", fontSize = 15.sp)
+                    Text(monitorButtonText, fontSize = 15.sp)
                 }
             }
         }
