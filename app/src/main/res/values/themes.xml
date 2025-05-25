@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 针对 API 23 (Android 6.0 Marshmallow) 及更高版本的应用,
+         Theme.MaterialComponents.DayNight.NoActionBar (或类似的 Material Components 主题)
+         是 Material Design 组件和深色主题支持的良好基础。
+         由于我们使用 Jetpack Compose 和 Material 3,
+         此 XML 主题主要用作 Compose UI 设置之前的启动主题。
+         如果您有任何传统的 Android View，它也可以用于这些 View。 -->
+    <style name="Theme.HumanVehicleMonitor" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- 如果需要，您可以进一步自定义此 XML 主题以用于启动屏幕
+             或应用程序中任何可能不使用 Compose 的部分。
+             例如，为启动屏幕设置 windowBackground。 -->
+
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+    </style>
+
+    <!--
+    <style name="Theme.HumanVehicleMonitor.Night" parent="android:Theme.Material.NoActionBar">
+    </style>
+    -->
+</resources>
