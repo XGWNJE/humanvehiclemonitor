@@ -10,10 +10,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+//import androidx.compose.ui.draw.clip // 未使用的导入，可以移除
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -21,6 +23,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionState
@@ -42,17 +45,16 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.i(TAG, "onCreate: Activity 创建。") // 中文日志：Activity 创建
-        WindowCompat.setDecorFitsSystemWindows(window, false) // 关键：允许内容绘制到系统栏后面
-        // 以下两行在 HumanVehicleMonitorTheme 中也做了，但在这里设置可以确保启动时即生效
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = AndroidColor.TRANSPARENT
         window.navigationBarColor = AndroidColor.TRANSPARENT
 
 
         setContent {
-            HumanVehicleMonitorTheme { // Theme 内部会处理状态栏和导航栏图标颜色
+            HumanVehicleMonitorTheme {
                 Surface(
-                    modifier = Modifier.fillMaxSize(), // Surface 作为根，填满整个屏幕
-                    color = MaterialTheme.colorScheme.background // 背景色
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
                 ) {
                     Log.d(TAG, "setContent: HumanVehicleMonitorTheme 和 Surface 已应用。") // 中文日志
                     MainScreen()
@@ -61,30 +63,29 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // onStart, onResume, onPause, onStop, onDestroy 方法保持不变
     override fun onStart() {
         super.onStart()
-        Log.i(TAG, "onStart: Activity 启动。")
+        Log.i(TAG, "onStart: Activity 启动。") // 中文日志
     }
 
     override fun onResume() {
         super.onResume()
-        Log.i(TAG, "onResume: Activity 恢复。")
+        Log.i(TAG, "onResume: Activity 恢复。") // 中文日志
     }
 
     override fun onPause() {
         super.onPause()
-        Log.i(TAG, "onPause: Activity 暂停。")
+        Log.i(TAG, "onPause: Activity 暂停。") // 中文日志
     }
 
     override fun onStop() {
         super.onStop()
-        Log.i(TAG, "onStop: Activity 停止。")
+        Log.i(TAG, "onStop: Activity 停止。") // 中文日志
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.i(TAG, "onDestroy: Activity 销毁。")
+        Log.i(TAG, "onDestroy: Activity 销毁。") // 中文日志
     }
 }
 
@@ -95,12 +96,11 @@ fun MainScreen() {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val mainScreenTag = "MainScreen"
-    Log.i(mainScreenTag, "MainScreen: Composable 开始组合或重组。")
+    Log.i(mainScreenTag, "MainScreen: Composable 开始组合或重组。") // 中文日志
 
     val cameraPermissionState: PermissionState =
         rememberPermissionState(Manifest.permission.CAMERA)
     var showRationaleDialog by remember { mutableStateOf(false) }
-    Log.d(mainScreenTag, "相机权限状态初始值: isGranted=${cameraPermissionState.status.isGranted}, shouldShowRationale=${cameraPermissionState.status.shouldShowRationale}")
 
     var detectionResults by remember { mutableStateOf<ObjectDetectionResult?>(null) }
     var inferenceTime by remember { mutableStateOf(0L) }
@@ -108,14 +108,13 @@ fun MainScreen() {
     var imageHeightForOverlay by remember { mutableStateOf(0) }
     var currentStatusText by remember { mutableStateOf("状态: 空闲") } // 中文状态
     var detectionError by remember { mutableStateOf<String?>(null) }
+    var lastUiUpdateTime by remember { mutableStateOf(0L) } // 声明并初始化 lastUiUpdateTime
 
-    var lastUiUpdateTime by remember { mutableStateOf(0L) }
-    val uiUpdateIntervalMs = 80L // UI 更新节流间隔
+    val defaultModelName = "efficientdet_lite0.tflite"
+    val currentThreshold = remember { mutableStateOf(ObjectDetectorHelper.DEFAULT_THRESHOLD) } // 示例，实际值应来自您的配置
+    val currentMaxResults = remember { mutableStateOf(ObjectDetectorHelper.DEFAULT_MAX_RESULTS) } // 示例
+    val currentDelegate = remember { mutableStateOf(ObjectDetectorHelper.DELEGATE_CPU) } // 示例
 
-    val defaultModelName = "efficientdet_lite0.tflite" // 确保此模型在 assets 文件夹中
-    val currentThreshold = remember { mutableStateOf(ObjectDetectorHelper.DEFAULT_THRESHOLD) }
-    val currentMaxResults = remember { mutableStateOf(ObjectDetectorHelper.DEFAULT_MAX_RESULTS) }
-    val currentDelegate = remember { mutableStateOf(ObjectDetectorHelper.DELEGATE_CPU) }
 
     val objectDetectorListener = remember {
         object : ObjectDetectorListener {
@@ -128,24 +127,25 @@ fun MainScreen() {
             override fun onResults(resultBundle: ObjectDetectorHelper.ResultBundle) {
                 Log.v(mainScreenTag, "onResults (Listener): 收到新结果。图像 ${resultBundle.inputImageWidth}x${resultBundle.inputImageHeight}, 推理 ${resultBundle.inferenceTime}ms, 检测数: ${resultBundle.results.firstOrNull()?.detections()?.size ?: 0}") // 中文日志 (Verbose)
                 val currentTime = SystemClock.uptimeMillis()
+                val uiUpdateIntervalMs = 80L // UI 更新节流间隔
+
+                // *** 关键修复：修正UI更新条件并更新 lastUiUpdateTime ***
                 if (currentTime - lastUiUpdateTime > uiUpdateIntervalMs || detectionResults == null) {
-                    Log.d(mainScreenTag, "onResults (Listener): 准备更新UI。上次更新时间: $lastUiUpdateTime, 当前时间: $currentTime") // 中文日志
                     detectionResults = resultBundle.results.firstOrNull()
                     inferenceTime = resultBundle.inferenceTime
                     imageWidthForOverlay = resultBundle.inputImageWidth
                     imageHeightForOverlay = resultBundle.inputImageHeight
                     currentStatusText = "状态: 监控中" // 中文状态
                     detectionError = null // 清除之前的错误
-                    lastUiUpdateTime = currentTime
+                    lastUiUpdateTime = currentTime // 正确更新 lastUiUpdateTime
                 } else {
-                    Log.v(mainScreenTag, "因节流跳过UI更新。当前时间: $currentTime, 上次更新: $lastUiUpdateTime, 间隔: ${currentTime - lastUiUpdateTime}ms") // 中文日志 (Verbose)
+                    Log.v(mainScreenTag, "因节流跳过UI更新。间隔: ${currentTime - lastUiUpdateTime}ms") // 中文日志
                 }
             }
         }
     }
-
-    val objectDetectorHelper = remember(context, currentThreshold.value, currentMaxResults.value, currentDelegate.value, defaultModelName) {
-        Log.i(mainScreenTag, "remember: 正在创建/重新创建 ObjectDetectorHelper 实例。依赖项: threshold=${currentThreshold.value}, maxResults=${currentMaxResults.value}, delegate=${currentDelegate.value}, model=$defaultModelName") // 中文日志
+    val objectDetectorHelper = remember(context, currentThreshold.value, currentMaxResults.value, currentDelegate.value, defaultModelName) { // 添加依赖项
+        Log.i(mainScreenTag, "remember: 正在创建/重新创建 ObjectDetectorHelper 实例。") // 中文日志
         ObjectDetectorHelper(
             context = context,
             objectDetectorListener = objectDetectorListener,
@@ -154,149 +154,143 @@ fun MainScreen() {
             currentDelegate = currentDelegate.value,
             modelName = defaultModelName,
             runningMode = RunningMode.LIVE_STREAM
-        ).also {
-            Log.i(mainScreenTag, "remember: ObjectDetectorHelper 实例已成功创建。实例哈希: ${it.hashCode()}") // 中文日志
-        }
+        )
     }
-
     DisposableEffect(lifecycleOwner, objectDetectorHelper) {
-        Log.i(mainScreenTag, "DisposableEffect: 开始执行。ObjectDetectorHelper 实例哈希: ${objectDetectorHelper.hashCode()}, isClosed: ${objectDetectorHelper.isClosed()}") // 中文日志
         lifecycleOwner.lifecycle.addObserver(objectDetectorHelper)
-        Log.i(mainScreenTag, "DisposableEffect: ObjectDetectorHelper 观察者已添加。") // 中文日志
         onDispose {
-            Log.i(mainScreenTag, "DisposableEffect (onDispose): 开始清理。准备移除观察者并清理 ObjectDetectorHelper。实例哈希: ${objectDetectorHelper.hashCode()}, isClosed before clear: ${objectDetectorHelper.isClosed()}") // 中文日志
             lifecycleOwner.lifecycle.removeObserver(objectDetectorHelper)
-            Log.i(mainScreenTag, "DisposableEffect (onDispose): ObjectDetectorHelper 观察者已移除。") // 中文日志
             objectDetectorHelper.clearObjectDetector()
-            Log.i(mainScreenTag, "DisposableEffect (onDispose): objectDetectorHelper.clearObjectDetector() 已调用。isClosed after clear: ${objectDetectorHelper.isClosed()}") // 中文日志
         }
     }
-
     LaunchedEffect(cameraPermissionState.status) {
-        Log.d(mainScreenTag, "LaunchedEffect (Permission): 相机权限状态变更: ${cameraPermissionState.status}") // 中文日志
         if (!cameraPermissionState.status.isGranted && cameraPermissionState.status.shouldShowRationale) {
-            Log.i(mainScreenTag, "LaunchedEffect (Permission): 需要显示权限请求理由对话框。") // 中文日志
             showRationaleDialog = true
         } else if (!cameraPermissionState.status.isGranted) {
-            // 如果权限未授予且不需要显示理由（例如，用户之前选择了“不再询问”），
-            // 或者这是第一次请求权限。
-            Log.i(mainScreenTag, "LaunchedEffect (Permission): 权限未授予，直接请求权限。") // 中文日志
             cameraPermissionState.launchPermissionRequest()
-        } else {
-            Log.i(mainScreenTag, "LaunchedEffect (Permission): 相机权限已授予。") // 中文日志
-            // 权限已授予，可以执行需要权限的操作，例如初始化相机
         }
     }
 
     if (showRationaleDialog) {
         AlertDialog(
-            onDismissRequest = {
-                Log.d(mainScreenTag, "权限理由对话框: 用户关闭。") // 中文日志
-                showRationaleDialog = false
-            },
+            onDismissRequest = { showRationaleDialog = false },
             title = { Text("需要相机权限") }, // 文本：需要相机权限
             text = { Text("此应用需要相机访问权限以检测人和车辆。请授予权限。") }, // 文本：此应用需要相机访问权限以检测人和车辆。请授予权限。
             confirmButton = {
                 Button(onClick = {
-                    Log.d(mainScreenTag, "权限理由对话框: 用户点击授予。") // 中文日志
                     showRationaleDialog = false
                     cameraPermissionState.launchPermissionRequest()
                 }) { Text("授予") } // 文本：授予
             },
             dismissButton = {
-                Button(onClick = {
-                    Log.d(mainScreenTag, "权限理由对话框: 用户点击拒绝。") // 中文日志
-                    showRationaleDialog = false
-                }) { Text("拒绝") } // 文本：拒绝
+                Button(onClick = { showRationaleDialog = false }) { Text("拒绝") } // 文本：拒绝
             }
         )
     }
 
-    // Box 作为根布局，让 CameraView 能够铺满整个屏幕（包括副控区域）
-    // 这个 Box 的背景将是其父 Surface 的背景色
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize()) { // 根 Box，允许 CameraView 铺满
         if (cameraPermissionState.status.isGranted) {
-            Log.d(mainScreenTag, "相机权限已授予，显示 CameraView。") // 中文日志
             CameraView(
-                modifier = Modifier.fillMaxSize(), // CameraView 填满整个 Box
+                modifier = Modifier.fillMaxSize(),
                 objectDetectorHelper = objectDetectorHelper
             )
-            // ResultsOverlay 应该在 CameraView 之上，并且也应该能够利用整个屏幕空间，
-            // 但其内部绘制的内容（检测框、文本）需要考虑安全区域。
-            // ResultsOverlay 内部的 BoxWithConstraints 会处理其内容的缩放和定位。
             ResultsOverlay(
                 results = detectionResults,
                 imageHeight = imageHeightForOverlay,
                 imageWidth = imageWidthForOverlay,
-                modifier = Modifier.fillMaxSize() // ResultsOverlay 也填满整个 Box
+                modifier = Modifier.fillMaxSize()
             )
         } else {
-            // 如果权限未授予，在屏幕中央显示提示信息
             PermissionDeniedContent(
                 cameraPermissionState = cameraPermissionState,
-                modifier = Modifier.align(Alignment.Center) // 居中显示
+                modifier = Modifier.align(Alignment.Center)
             )
         }
 
-        // UI 控制元素（状态文本、按钮）应该避开系统栏和副控区域
-        // 使用 WindowInsets.safeDrawing 来确保它们在安全区域内。
+        // UI 控制元素层
         val configuration = LocalConfiguration.current
         val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        Log.d(mainScreenTag, "当前屏幕方向: ${if (isLandscape) "横屏" else "竖屏"}") // 中文日志
+
+        // 状态文本的统一样式
+        val statusTextModifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp) // 给一点垂直间距
+            .background(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f), // 半透明背景
+                shape = RoundedCornerShape(8.dp) // 圆角
+            )
+            .padding(horizontal = 12.dp, vertical = 8.dp) // 文本内边距
 
         if (isLandscape) {
+            // 横屏 UI
             Row(
                 modifier = Modifier
-                    .fillMaxSize() // 填满父 Box，使其可以对齐到边缘
-                    .windowInsetsPadding(WindowInsets.safeDrawing) // 应用安全区域内边距到整个 Row
-                    .padding(horizontal = 16.dp, vertical = 8.dp), // 在安全区域基础上再添加额外的应用内边距
-                verticalAlignment = Alignment.CenterVertically
+                    .fillMaxSize() // 填满以利用 Alignment
+                    .windowInsetsPadding(WindowInsets.safeDrawing) // 应用安全区域内边距
+                    .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 24.dp), // 应用内边距，底部多一点给按钮留空间
+                verticalAlignment = Alignment.Bottom // 将整个控制面板区域对齐到底部
             ) {
-                Column( // 控制面板
+                // 左侧控制面板
+                Column(
                     modifier = Modifier
-                        .fillMaxHeight()
-                        .weight(0.3f) // 使用 weight 而不是 fillMaxWidth(0.3f) 以便在 Row 中正确分配空间
-                        .padding(end = 8.dp),
+                        .weight(0.4f) // 调整权重，给控制面板更多空间或根据内容调整
+                        .fillMaxHeight(), // 仍然填满高度，但父Row已对齐到底部
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.SpaceAround
+                    verticalArrangement = Arrangement.Bottom // 将按钮和文本推到底部
                 ) {
                     Text(
-                        text = if (detectionError != null) "错误: $detectionError" else "$currentStatusText ($inferenceTime ms)",
-                        style = MaterialTheme.typography.titleMedium,
+                        text = if (detectionError != null) "错误: $detectionError" else "$currentStatusText (${inferenceTime}ms)",
+                        style = MaterialTheme.typography.bodyLarge.copy(fontSize = 14.sp), // 调整字体
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(bottom = 16.dp),
-                        color = if (detectionError != null) MaterialTheme.colorScheme.error else LocalContentColor.current
+                        modifier = statusTextModifier.padding(bottom = 8.dp), // 状态文本和按钮之间的间距
+                        color = if (detectionError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Button(onClick = { Log.d(mainScreenTag, "按钮点击: 切换预览") /* TODO */ }, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) { Text("切换预览") } // 文本：切换预览
-                        Button(onClick = { Log.d(mainScreenTag, "按钮点击: 开始监控") /* TODO */ }, modifier = Modifier.fillMaxWidth()) { Text("开始监控") } // 文本：开始监控
-                    }
+                    Button(
+                        onClick = { Log.d(mainScreenTag, "按钮点击: 切换预览") /* TODO */ },
+                        modifier = Modifier.fillMaxWidth().height(48.dp).padding(bottom = 8.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("切换预览", fontSize = 14.sp) } // 文本：切换预览
+                    Button(
+                        onClick = { Log.d(mainScreenTag, "按钮点击: 开始监控") /* TODO */ },
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("开始监控", fontSize = 14.sp) } // 文本：开始监控
                 }
-                Spacer(modifier = Modifier.weight(0.7f)) // 占位符，将控制面板推到左边，因为相机视图在底层
+                Spacer(modifier = Modifier.weight(0.6f)) // 右侧空白区域
             }
-        } else { // Portrait
+        } else {
+            // 竖屏 UI
             Column(
                 modifier = Modifier
-                    .fillMaxSize() // 填满父 Box
-                    .windowInsetsPadding(WindowInsets.safeDrawing) // 应用安全区域内边距到整个 Column
-                    .padding(16.dp), // 在安全区域基础上再添加额外的应用内边距
+                    .fillMaxSize() // 填满以利用 Alignment
+                    .windowInsetsPadding(WindowInsets.safeDrawing) // 应用安全区域内边距
+                    .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                // 状态文本放顶部
                 Text(
-                    text = if (detectionError != null) "错误: $detectionError" else "$currentStatusText ($inferenceTime ms)",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), // 调整边距
+                    text = if (detectionError != null) "错误: $detectionError" else "$currentStatusText (${inferenceTime}ms)",
+                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp), // 调整字体
                     textAlign = TextAlign.Center,
-                    color = if (detectionError != null) MaterialTheme.colorScheme.error else LocalContentColor.current
+                    modifier = statusTextModifier.align(Alignment.CenterHorizontally), // 确保在Column中也居中
+                    color = if (detectionError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                // Spacer 将按钮推到底部，相机视图在底层会占据中间空间
-                Spacer(modifier = Modifier.weight(1f))
+                Spacer(modifier = Modifier.weight(1f)) // 将按钮推到底部
+                // 按钮放底部
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
+                    horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally) // 按钮间距并居中
                 ) {
-                    Button(onClick = { Log.d(mainScreenTag, "按钮点击: 切换预览") /* TODO */ }) { Text("切换预览") } // 文本：切换预览
-                    Button(onClick = { Log.d(mainScreenTag, "按钮点击: 开始监控") /* TODO */ }) { Text("开始监控") } // 文本：开始监控
+                    Button(
+                        onClick = { Log.d(mainScreenTag, "按钮点击: 切换预览") /* TODO */ },
+                        modifier = Modifier.weight(1f).height(52.dp), // 让按钮等宽并有足够高度
+                        shape = RoundedCornerShape(12.dp) // 圆角按钮
+                    ) { Text("切换预览", fontSize = 16.sp) } // 文本：切换预览
+                    Button(
+                        onClick = { Log.d(mainScreenTag, "按钮点击: 开始监控") /* TODO */ },
+                        modifier = Modifier.weight(1f).height(52.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("开始监控", fontSize = 16.sp) } // 文本：开始监控
                 }
             }
         }
@@ -306,10 +300,8 @@ fun MainScreen() {
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun PermissionDeniedContent(cameraPermissionState: PermissionState, modifier: Modifier = Modifier) {
-    val mainScreenTag = "MainScreen" // 复用TAG
-    Log.d(mainScreenTag, "PermissionDeniedContent: 显示权限拒绝内容。") // 中文日志
     Column(
-        modifier = modifier.padding(16.dp), // 应用传入的 modifier，并添加一些内边距
+        modifier = modifier.padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -319,7 +311,6 @@ fun PermissionDeniedContent(cameraPermissionState: PermissionState, modifier: Mo
             modifier = Modifier.padding(bottom = 8.dp)
         )
         Button(onClick = {
-            Log.d(mainScreenTag, "PermissionDeniedContent: 用户点击再次请求权限。") // 中文日志
             cameraPermissionState.launchPermissionRequest()
         }) { Text("再次请求权限") } // 文本：再次请求权限
     }
@@ -331,7 +322,6 @@ fun PermissionDeniedContent(cameraPermissionState: PermissionState, modifier: Mo
 fun DefaultPreviewPortrait() {
     HumanVehicleMonitorTheme {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            // 模拟竖屏配置
             val configuration = Configuration().apply { orientation = Configuration.ORIENTATION_PORTRAIT }
             CompositionLocalProvider(LocalConfiguration provides configuration) {
                 MainScreen()
@@ -340,12 +330,11 @@ fun DefaultPreviewPortrait() {
     }
 }
 
-@Preview(showBackground = true, name = "Landscape Preview", widthDp = 720, heightDp = 360)
+@Preview(showBackground = true, name = "Landscape Preview", widthDp = 800, heightDp = 390) // 调整预览尺寸以更好模拟横屏
 @Composable
 fun DefaultPreviewLandscape() {
     HumanVehicleMonitorTheme {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            // 模拟横屏配置
             val configuration = Configuration().apply { orientation = Configuration.ORIENTATION_LANDSCAPE }
             CompositionLocalProvider(LocalConfiguration provides configuration) {
                 MainScreen()
