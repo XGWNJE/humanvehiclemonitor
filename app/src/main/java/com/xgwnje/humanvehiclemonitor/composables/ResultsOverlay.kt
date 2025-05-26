@@ -1,3 +1,4 @@
+// composables/ResultsOverlay.kt
 package com.xgwnje.humanvehiclemonitor.composables
 
 import android.graphics.RectF
@@ -7,25 +8,29 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.tensorflow.lite.task.vision.detector.Detection // TensorFlow Lite Detection
-import kotlin.math.min
+import org.tensorflow.lite.task.vision.detector.Detection
+import kotlin.math.roundToInt
 
 @Composable
 fun ResultsOverlay(
-    results: List<Detection>?, // 改为 List<Detection>? from TensorFlow Lite
-    imageHeight: Int,      // 这是用于检测的（可能已旋转的）图像的像素高度
-    imageWidth: Int,       // 这是用于检测的（可能已旋转的）图像的像素宽度
+    results: List<Detection>?,
+    imageHeight: Int,
+    imageWidth: Int,
+    personLabels: Set<String>, // 新增参数
+    vehicleLabels: Set<String>, // 新增参数
     modifier: Modifier = Modifier
 ) {
     if (imageHeight == 0 || imageWidth == 0) {
@@ -38,81 +43,94 @@ fun ResultsOverlay(
         val canvasHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
 
         if (canvasWidthPx <= 0 || canvasHeightPx <= 0) {
-            Log.w("ResultsOverlay(TFLite)", "画布宽度或高度为零或负数，因此不执行任何绘制逻辑。CanvasW: $canvasWidthPx, CanvasH: $canvasHeightPx") // 中文日志
+            Log.w("ResultsOverlay(TFLite)", "画布宽度或高度为零或负数。CanvasW: $canvasWidthPx, CanvasH: $canvasHeightPx") // 中文日志
             return@BoxWithConstraints
         }
 
-        // 针对 FIT_CENTER 的核心修改 (与之前类似，但确保与 TFLite 的坐标系兼容)
-        val scaleX = canvasWidthPx / imageWidth.toFloat()
-        val scaleY = canvasHeightPx / imageHeight.toFloat()
-        val scale = min(scaleX, scaleY)
+        val imageAspectRatio = imageWidth.toFloat() / imageHeight.toFloat()
+        val canvasAspectRatio = canvasWidthPx / canvasHeightPx
 
-        val scaledImageWidth = imageWidth * scale
-        val scaledImageHeight = imageHeight * scale
+        val scale: Float
+        val transformOffsetX: Float
+        val transformOffsetY: Float
 
-        val transformOffsetX = (canvasWidthPx - scaledImageWidth) / 2f
-        val transformOffsetY = (canvasHeightPx - scaledImageHeight) / 2f
+        if (imageAspectRatio > canvasAspectRatio) {
+            scale = canvasWidthPx / imageWidth.toFloat()
+            transformOffsetX = 0f
+            transformOffsetY = (canvasHeightPx - (imageHeight.toFloat() * scale)) / 2f
+        } else {
+            scale = canvasHeightPx / imageHeight.toFloat()
+            transformOffsetY = 0f
+            transformOffsetX = (canvasWidthPx - (imageWidth.toFloat() * scale)) / 2f
+        }
 
-        if (results != null && results.isNotEmpty()) {
-            // Log.d("ResultsOverlay(TFLite)", "检测到 ${results.size} 个对象。") // 中文日志
+        if (results != null) {
+            results.forEachIndexed { index, detection ->
+                val uniqueKey = detection.boundingBox.hashCode() + index
 
-            results.forEach { detection ->
-                // TensorFlow Lite Task Vision 的 BoundingBox 是 RectF
-                // RectF 包含 left, top, right, bottom 坐标
-                val boundingBox: RectF = detection.boundingBox
+                key(uniqueKey) {
+                    if (detection.categories.isNotEmpty()) {
+                        val topCategory = detection.categories[0]
+                        val normalizedLabel = topCategory.label.lowercase().trim()
 
-                // 将 TFLite 的 RectF 坐标转换为 Compose 的左上角和宽高
-                val boxLeftPx = boundingBox.left * scale + transformOffsetX
-                val boxTopPx = boundingBox.top * scale + transformOffsetY
-                val boxWidthPx = boundingBox.width() * scale // RectF.width()
-                val boxHeightPx = boundingBox.height() * scale // RectF.height()
+                        // 过滤逻辑
+                        val isPerson = personLabels.contains(normalizedLabel)
+                        // 使用与报警逻辑类似的车辆判断方式，以获得一致性
+                        val isVehicle = vehicleLabels.any { vehicleLabel -> normalizedLabel.contains(vehicleLabel) }
 
-                if (boxWidthPx <= 0 || boxHeightPx <= 0) {
-                    Log.w("ResultsOverlay(TFLite)", "计算得到的检测框尺寸无效 (<=0): W=$boxWidthPx, H=$boxHeightPx. 跳过绘制此框。") // 中文日志
-                    return@forEach
-                }
 
-                val boxLeftDp = with(LocalDensity.current) { boxLeftPx.toDp() }
-                val boxTopDp = with(LocalDensity.current) { boxTopPx.toDp() }
-                val boxWidthDp = with(LocalDensity.current) { boxWidthPx.toDp() }
-                val boxHeightDp = with(LocalDensity.current) { boxHeightPx.toDp() }
+                        if (isPerson || isVehicle) { // 只绘制人和车辆
+                            val boundingBox: RectF = detection.boundingBox
 
-                if (boxWidthDp <= 0.dp || boxHeightDp <= 0.dp) {
-                    Log.w("ResultsOverlay(TFLite)", "计算得到的检测框DP尺寸无效 (<=0): W=$boxWidthDp, H=$boxHeightDp. 跳过绘制此框。") // 中文日志
-                    return@forEach
-                }
+                            val targetBoxLeftPx = boundingBox.left * scale + transformOffsetX
+                            val targetBoxTopPx = boundingBox.top * scale + transformOffsetY
+                            val targetBoxWidthPx = boundingBox.width() * scale
+                            val targetBoxHeightPx = boundingBox.height() * scale
 
-                Box(
-                    modifier = Modifier
-                        .offset(x = boxLeftDp, y = boxTopDp)
-                        .width(boxWidthDp)
-                        .height(boxHeightDp)
-                        .border(2.dp, Color.Green) // 将颜色改为绿色以便与之前的 MediaPipe 区分
-                )
+                            if (targetBoxWidthPx <= 0 || targetBoxHeightPx <= 0) {
+                                Log.w("ResultsOverlay(TFLite)", "计算得到的检测框尺寸无效 (<=0): W=$targetBoxWidthPx, H=$targetBoxHeightPx. 跳过绘制此框。") // 中文日志
+                            } else {
+                                val boxWidthDp: Dp = with(LocalDensity.current) { targetBoxWidthPx.toDp() }
+                                val boxHeightDp: Dp = with(LocalDensity.current) { targetBoxHeightPx.toDp() }
 
-                // TensorFlow Lite Detection 中的 Category 包含 label 和 score
-                if (detection.categories.isNotEmpty()) {
-                    val topCategory = detection.categories[0] // 通常第一个是最佳匹配
-                    val labelText = "${topCategory.label} (${String.format("%.2f", topCategory.score)})"
-                    // Log.d("ResultsOverlay(TFLite)", "标签: $labelText, 位置: $boxLeftDp, $boxTopDp")
+                                if (boxWidthDp > 0.dp && boxHeightDp > 0.dp) {
+                                    Box(
+                                        modifier = Modifier
+                                            .offset {
+                                                IntOffset(
+                                                    targetBoxLeftPx.roundToInt(),
+                                                    targetBoxTopPx.roundToInt()
+                                                )
+                                            }
+                                            .size(width = boxWidthDp, height = boxHeightDp)
+                                            .border(2.dp, Color.Green)
+                                    )
 
-                    Box(
-                        modifier = Modifier
-                            .offset(x = boxLeftDp, y = boxTopDp)
-                            .background(Color.Green.copy(alpha = 0.6f)) // 同样改为绿色
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = labelText,
-                            color = Color.White,
-                            fontSize = 10.sp,
-                            maxLines = 1
-                        )
+                                    val labelText = "${topCategory.label} (${String.format("%.2f", topCategory.score)})"
+                                    Box(
+                                        modifier = Modifier
+                                            .offset {
+                                                IntOffset(
+                                                    targetBoxLeftPx.roundToInt(),
+                                                    targetBoxTopPx.roundToInt()
+                                                )
+                                            }
+                                            .background(Color.Green.copy(alpha = 0.7f))
+                                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = labelText,
+                                            color = Color.White,
+                                            fontSize = 10.sp,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
-        } else {
-            // Log.d("ResultsOverlay(TFLite)", "结果为 null 或为空，不绘制检测框。") // 中文日志
         }
     }
 }

@@ -1,3 +1,4 @@
+// MainActivity.kt
 package com.xgwnje.humanvehiclemonitor
 
 import android.Manifest
@@ -42,7 +43,7 @@ import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
 import org.tensorflow.lite.task.vision.detector.Detection
 import com.xgwnje.humanvehiclemonitor.composables.ResultsOverlay
-import com.xgwnje.humanvehiclemonitor.composables.SettingsDialog
+// import com.xgwnje.humanvehiclemonitor.composables.SettingsDialog // Using local SettingsDialog
 import com.xgwnje.humanvehiclemonitor.composables.StatusAndControlsView
 import com.xgwnje.humanvehiclemonitor.objectdetector.ObjectDetectorHelper
 import com.xgwnje.humanvehiclemonitor.objectdetector.ObjectDetectorListener
@@ -69,7 +70,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Log.i(TAG, "onCreate: Activity 创建。")
+        Log.i(TAG, "onCreate: Activity 创建。") // 中文日志: Activity 创建。
 
         // 移除 MediaPlayer 初始化
         // mediaPlayer = MediaPlayer.create(this, R.raw.alarm_sound) ...
@@ -80,7 +81,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    Log.d(TAG, "setContent: HumanVehicleMonitorTheme 和 Surface 已应用。")
+                    Log.d(TAG, "setContent: HumanVehicleMonitorTheme 和 Surface 已应用。") // 中文日志: HumanVehicleMonitorTheme 和 Surface 已应用。
                     MainScreen() // 不再传递 onPlayAlarm
                 }
             }
@@ -91,29 +92,29 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        Log.i(TAG, "onStart: Activity 启动。")
+        Log.i(TAG, "onStart: Activity 启动。") // 中文日志: Activity 启动。
     }
 
     override fun onResume() {
         super.onResume()
-        Log.i(TAG, "onResume: Activity 恢复。")
+        Log.i(TAG, "onResume: Activity 恢复。") // 中文日志: Activity 恢复。
     }
 
     override fun onPause() {
         super.onPause()
-        Log.i(TAG, "onPause: Activity 暂停。")
+        Log.i(TAG, "onPause: Activity 暂停。") // 中文日志: Activity 暂停。
         // 移除 mediaPlayer?.pause()
     }
 
     override fun onStop() {
         super.onStop()
-        Log.i(TAG, "onStop: Activity 停止。")
+        Log.i(TAG, "onStop: Activity 停止。") // 中文日志: Activity 停止。
         // 移除 mediaPlayer?.stop() 和 prepare()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.i(TAG, "onDestroy: Activity 销毁。")
+        Log.i(TAG, "onDestroy: Activity 销毁。") // 中文日志: Activity 销毁。
         // 移除 mediaPlayer?.release()
         // mediaPlayer = null
     }
@@ -134,7 +135,7 @@ fun MainScreen() { // 移除 onPlayAlarm 参数
     var inferenceTime by remember { mutableStateOf(0L) }
     var imageWidthForOverlay by remember { mutableStateOf(0) }
     var imageHeightForOverlay by remember { mutableStateOf(0) }
-    var currentStatusText by remember { mutableStateOf("状态: 已停止") }
+    var currentStatusText by remember { mutableStateOf("状态: 已停止") } // 中文日志: 状态: 已停止
     var detectionError by remember { mutableStateOf<String?>(null) }
     var lastUiUpdateTime by remember { mutableStateOf(0L) }
 
@@ -142,7 +143,6 @@ fun MainScreen() { // 移除 onPlayAlarm 参数
     var isMonitoringActive by rememberSaveable { mutableStateOf(false) }
 
     var alarmMode by rememberSaveable { mutableStateOf(AlarmMode.PERSON_AND_VEHICLE) }
-    // 修改 continuousDetectionDurationMs 的声明方式
     val continuousDetectionDurationMsState = rememberSaveable { mutableLongStateOf(3000L) }
 
     val continuouslyDetectedTargets = remember { mutableStateMapOf<String, Long>() }
@@ -160,8 +160,8 @@ fun MainScreen() { // 移除 onPlayAlarm 参数
     val objectDetectorListener = remember {
         object : ObjectDetectorListener {
             override fun onError(error: String, errorCode: Int) {
-                Log.e(mainScreenTag, "onError (Listener): 收到 ObjectDetectorHelper 错误: '$error', code: $errorCode.")
-                currentStatusText = "状态: 错误 ($error)"
+                Log.e(mainScreenTag, "onError (Listener): 收到 ObjectDetectorHelper 错误: '$error', code: $errorCode.") // 中文日志: 收到 ObjectDetectorHelper 错误
+                currentStatusText = "状态: 错误 ($error)" // 中文日志: 状态: 错误
                 detectionError = error
                 detectionResults = null
                 imageWidthForOverlay = 0
@@ -190,16 +190,15 @@ fun MainScreen() { // 移除 onPlayAlarm 参数
                                 }
 
                                 if (shouldProcessThisTarget) {
-                                    val targetCategoryForAlarm = if (isPerson) "人员" else if (isVehicle) "车辆" else normalizedLabel // 用于报警文本
+                                    val targetCategoryForAlarm = if (isPerson) "人员" else if (isVehicle) "车辆" else normalizedLabel // 中文日志: 人员, 车辆
 
                                     val detectionStartTime = continuouslyDetectedTargets.getOrPut(targetCategoryForAlarm) { currentTimeMs }
                                     val duration = currentTimeMs - detectionStartTime
 
-                                    // 修复：使用 continuousDetectionDurationMsState.value
                                     if (duration >= continuousDetectionDurationMsState.value) {
                                         val lastAlarmTime = alarmedTargetsCoolDown[targetCategoryForAlarm] ?: 0L
                                         if (currentTimeMs - lastAlarmTime > alarmCoolDownMs) {
-                                            val alarmMessage = "报警! 检测到${targetCategoryForAlarm}持续${duration / 1000}秒!"
+                                            val alarmMessage = "报警! 检测到${targetCategoryForAlarm}持续${duration / 1000}秒!" // 中文日志: 报警! 检测到...持续...秒!
                                             Log.i(mainScreenTag, alarmMessage)
                                             currentStatusText = alarmMessage // 更新状态文本以显示报警
                                             statusUpdatedByAlarm = true
@@ -213,15 +212,15 @@ fun MainScreen() { // 移除 onPlayAlarm 参数
                         }
                         val labelsToRemove = continuouslyDetectedTargets.keys.filterNot { trackingKey ->
                             when(trackingKey) {
-                                "人员" -> PERSON_LABELS.any { currentFrameDetectedLabels.contains(it) }
-                                "车辆" -> VEHICLE_LABELS.any { vehicleLabel -> currentFrameDetectedLabels.any { it.contains(vehicleLabel)} }
+                                "人员" -> PERSON_LABELS.any { currentFrameDetectedLabels.contains(it) } // 中文: 人员
+                                "车辆" -> VEHICLE_LABELS.any { vehicleLabel -> currentFrameDetectedLabels.any { it.contains(vehicleLabel)} } // 中文: 车辆
                                 else -> currentFrameDetectedLabels.contains(trackingKey)
                             }
                         }
                         labelsToRemove.forEach {
                             continuouslyDetectedTargets.remove(it)
                             alarmedTargetsCoolDown.remove(it)
-                            Log.d(mainScreenTag, "目标类别 '$it' 从持续检测列表中移除。")
+                            Log.d(mainScreenTag, "目标类别 '$it' 从持续检测列表中移除。") // 中文日志: 目标类别 ... 从持续检测列表中移除。
                         }
                     } else {
                         continuouslyDetectedTargets.clear()
@@ -234,7 +233,7 @@ fun MainScreen() { // 移除 onPlayAlarm 参数
                         imageWidthForOverlay = resultBundle.inputImageWidth
                         imageHeightForOverlay = resultBundle.inputImageHeight
                         detectionError = null
-                        currentStatusText = if (isMonitoringActive) "状态: 监控中..." else "状态: 预览中 (未监控)"
+                        currentStatusText = if (isMonitoringActive) "状态: 监控中..." else "状态: 预览中 (未监控)" // 中文日志: 状态: 监控中..., 状态: 预览中 (未监控)
                         lastUiUpdateTime = currentTimeMs
                     } else if (statusUpdatedByAlarm) {
                         detectionResults = resultBundle.results
@@ -248,7 +247,7 @@ fun MainScreen() { // 移除 onPlayAlarm 参数
 
                 } else { // resultBundle is null
                     if (detectionError == null) {
-                        currentStatusText = if (isMonitoringActive) "状态: 无检测结果 (监控中)" else "状态: 无检测结果 (预览中)"
+                        currentStatusText = if (isMonitoringActive) "状态: 无检测结果 (监控中)" else "状态: 无检测结果 (预览中)" // 中文日志: 状态: 无检测结果 (监控中), 状态: 无检测结果 (预览中)
                     }
                     detectionResults = null
                     lastUiUpdateTime = currentTimeMs
@@ -269,7 +268,7 @@ fun MainScreen() { // 移除 onPlayAlarm 参数
         currentDetectionIntervalMillis.longValue,
         defaultModelName
     ) {
-        Log.i(mainScreenTag, "remember: 正在创建/重新创建 ObjectDetectorHelper (TFLite) 实例。 Threshold: ${currentThreshold.floatValue}, MaxResults: ${currentMaxResults.intValue}, Delegate: ${currentDelegate.intValue}, Interval: ${currentDetectionIntervalMillis.longValue}ms")
+        Log.i(mainScreenTag, "remember: 正在创建/重新创建 ObjectDetectorHelper (TFLite) 实例。 Threshold: ${currentThreshold.floatValue}, MaxResults: ${currentMaxResults.intValue}, Delegate: ${currentDelegate.intValue}, Interval: ${currentDetectionIntervalMillis.longValue}ms") // 中文日志: 正在创建/重新创建 ObjectDetectorHelper (TFLite) 实例。
         ObjectDetectorHelper(
             context = context,
             objectDetectorListener = objectDetectorListener,
@@ -282,10 +281,10 @@ fun MainScreen() { // 移除 onPlayAlarm 参数
     }
 
     DisposableEffect(lifecycleOwner, objectDetectorHelper) {
-        Log.d(mainScreenTag, "DisposableEffect: 将 ObjectDetectorHelper 添加为生命周期观察者。 Helper hash: ${objectDetectorHelper.hashCode()}")
+        Log.d(mainScreenTag, "DisposableEffect: 将 ObjectDetectorHelper 添加为生命周期观察者。 Helper hash: ${objectDetectorHelper.hashCode()}") // 中文日志: 将 ObjectDetectorHelper 添加为生命周期观察者。
         lifecycleOwner.lifecycle.addObserver(objectDetectorHelper)
         onDispose {
-            Log.d(mainScreenTag, "DisposableEffect (onDispose): 从生命周期移除 ObjectDetectorHelper 并调用 clearObjectDetector。 Helper hash: ${objectDetectorHelper.hashCode()}")
+            Log.d(mainScreenTag, "DisposableEffect (onDispose): 从生命周期移除 ObjectDetectorHelper 并调用 clearObjectDetector。 Helper hash: ${objectDetectorHelper.hashCode()}") // 中文日志: 从生命周期移除 ObjectDetectorHelper 并调用 clearObjectDetector。
             lifecycleOwner.lifecycle.removeObserver(objectDetectorHelper)
             objectDetectorHelper.clearObjectDetector()
         }
@@ -310,15 +309,14 @@ fun MainScreen() { // 移除 onPlayAlarm 参数
     }
 
     if (showSettingsDialog) {
-        SettingsDialog(
+        SettingsDialog( // This is the SettingsDialog defined below in MainActivity.kt
             currentThreshold = currentThreshold,
             currentMaxResults = currentMaxResults,
             currentDelegate = currentDelegate,
             currentDetectionIntervalMillis = currentDetectionIntervalMillis,
             currentAlarmMode = alarmMode,
             onAlarmModeChange = { newMode -> alarmMode = newMode },
-            // 修复：传递 MutableLongState 本身或其 .value，并确保 SettingsDialog 正确处理
-            continuousDetectionDurationMsState = continuousDetectionDurationMsState, // 传递整个 State 对象
+            continuousDetectionDurationMsState = continuousDetectionDurationMsState,
             onDismiss = { showSettingsDialog = false }
         )
     }
@@ -335,11 +333,13 @@ fun MainScreen() { // 移除 onPlayAlarm 参数
                     results = detectionResults,
                     imageHeight = imageHeightForOverlay,
                     imageWidth = imageWidthForOverlay,
+                    personLabels = PERSON_LABELS, // 新增传递
+                    vehicleLabels = VEHICLE_LABELS, // 新增传递
                     modifier = Modifier.fillMaxSize()
                 )
             }
         } else {
-            PermissionDeniedContent(
+            PermissionDeniedContent( // Defined below in MainActivity.kt
                 cameraPermissionState = cameraPermissionState,
                 modifier = Modifier.align(Alignment.Center)
             )
@@ -359,13 +359,13 @@ fun MainScreen() { // 移除 onPlayAlarm 参数
             onToggleMonitoring = {
                 isMonitoringActive = !isMonitoringActive
                 if (isMonitoringActive) {
-                    currentStatusText = "状态: 监控中..."
-                    Log.i(mainScreenTag, "监控已启动。报警模式: $alarmMode, 持续时间: ${continuousDetectionDurationMsState.value} ms") // 修复：使用 .value
+                    currentStatusText = "状态: 监控中..." // 中文日志: 状态: 监控中...
+                    Log.i(mainScreenTag, "监控已启动。报警模式: $alarmMode, 持续时间: ${continuousDetectionDurationMsState.value} ms") // 中文日志: 监控已启动。报警模式: ..., 持续时间: ... ms
                 } else {
-                    currentStatusText = "状态: 已停止"
+                    currentStatusText = "状态: 已停止" // 中文日志: 状态: 已停止
                     continuouslyDetectedTargets.clear()
                     alarmedTargetsCoolDown.clear()
-                    Log.i(mainScreenTag, "监控已停止。")
+                    Log.i(mainScreenTag, "监控已停止。") // 中文日志: 监控已停止。
                 }
             },
             onShowSettingsDialog = { showSettingsDialog = true },
@@ -378,79 +378,77 @@ fun MainScreen() { // 移除 onPlayAlarm 参数
 fun CameraPermissionRationaleDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("需要相机权限") },
-        text = { Text("此应用需要相机访问权限以检测人和车辆。请授予权限。") },
+        title = { Text("需要相机权限") }, // 中文: 需要相机权限
+        text = { Text("此应用需要相机访问权限以检测人和车辆。请授予权限。") }, // 中文: 此应用需要相机访问权限以检测人和车辆。请授予权限。
         confirmButton = {
-            Button(onClick = onConfirm) { Text("授予") }
+            Button(onClick = onConfirm) { Text("授予") } // 中文: 授予
         },
         dismissButton = {
-            Button(onClick = onDismiss) { Text("拒绝") }
+            Button(onClick = onDismiss) { Text("拒绝") } // 中文: 拒绝
         }
     )
 }
 
-// SettingsDialog 现在应该接收 MutableLongState
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsDialog(
+fun SettingsDialog( // This is the local SettingsDialog used by MainScreen
     currentThreshold: MutableFloatState,
     currentMaxResults: MutableIntState,
     currentDelegate: MutableIntState,
     currentDetectionIntervalMillis: MutableLongState,
     currentAlarmMode: AlarmMode,
     onAlarmModeChange: (AlarmMode) -> Unit,
-    continuousDetectionDurationMsState: MutableLongState, // 接收 MutableLongState
+    continuousDetectionDurationMsState: MutableLongState,
     onDismiss: () -> Unit
 ) {
     val df = remember { DecimalFormat("#.##") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("调整参数和报警设置") },
+        title = { Text("调整参数和报警设置") }, // 中文: 调整参数和报警设置
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(vertical = 8.dp)) {
-                // ... (其他参数设置不变) ...
-                Text("模型参数", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
+                Text("模型参数", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp)) // 中文: 模型参数
 
-                Text("置信度阈值: ${df.format(currentThreshold.value)}") // 使用 .value for MutableFloatState if not using by
+                Text("置信度阈值: ${df.format(currentThreshold.value)}") // 中文: 置信度阈值
                 Slider(
-                    value = currentThreshold.value, // 使用 .value
-                    onValueChange = { currentThreshold.value = it }, // 使用 .value
+                    value = currentThreshold.value,
+                    onValueChange = { currentThreshold.value = it },
                     valueRange = 0.1f..0.9f,
                     steps = 79
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Text("最大结果数: ${currentMaxResults.value}") // 使用 .value for MutableIntState if not using by
+                Text("最大结果数: ${currentMaxResults.value}") // 中文: 最大结果数
                 Slider(
-                    value = currentMaxResults.value.toFloat(), // 使用 .value
-                    onValueChange = { currentMaxResults.value = it.toInt() }, // 使用 .value
+                    value = currentMaxResults.value.toFloat(),
+                    onValueChange = { currentMaxResults.value = it.toInt() },
                     valueRange = 1f..10f,
                     steps = 8
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Text("推理代理:")
+                Text("推理代理:") // 中文: 推理代理
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                 ) {
                     Button(
-                        onClick = { currentDelegate.value = ObjectDetectorHelper.DELEGATE_CPU }, // 使用 .value
-                        enabled = currentDelegate.value != ObjectDetectorHelper.DELEGATE_CPU, // 使用 .value
+                        onClick = { currentDelegate.value = ObjectDetectorHelper.DELEGATE_CPU },
+                        enabled = currentDelegate.value != ObjectDetectorHelper.DELEGATE_CPU,
                         modifier = Modifier.weight(1f)
                     ) { Text("CPU") }
                     Button(
-                        onClick = { currentDelegate.value = ObjectDetectorHelper.DELEGATE_GPU }, // 使用 .value
-                        enabled = currentDelegate.value != ObjectDetectorHelper.DELEGATE_GPU, // 使用 .value
+                        onClick = { currentDelegate.value = ObjectDetectorHelper.DELEGATE_GPU },
+                        enabled = currentDelegate.value != ObjectDetectorHelper.DELEGATE_GPU,
                         modifier = Modifier.weight(1f)
                     ) { Text("GPU") }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Text("模型识别间隔 (ms): ${currentDetectionIntervalMillis.value}") // 使用 .value
+                Text("模型识别间隔 (ms): ${currentDetectionIntervalMillis.value}") // 中文: 模型识别间隔 (ms)
                 Slider(
-                    value = currentDetectionIntervalMillis.value.toFloat(), // 使用 .value
-                    onValueChange = { currentDetectionIntervalMillis.value = it.roundToLong() }, // 使用 .value
+                    value = currentDetectionIntervalMillis.value.toFloat(),
+                    onValueChange = { currentDetectionIntervalMillis.value = it.roundToLong() },
                     valueRange = 0f..1000f,
                     steps = ((1000f - 0f) / 50f).toInt() - 1
                 )
@@ -458,9 +456,9 @@ fun SettingsDialog(
                 Divider()
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Text("报警设置", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
+                Text("报警设置", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp)) // 中文: 报警设置
 
-                Text("报警模式:")
+                Text("报警模式:") // 中文: 报警模式
                 Column(Modifier.selectableGroup()) {
                     AlarmMode.values().forEach { mode ->
                         Row(
@@ -481,9 +479,9 @@ fun SettingsDialog(
                             )
                             Text(
                                 text = when (mode) {
-                                    AlarmMode.PERSON_ONLY -> "只报警人员"
-                                    AlarmMode.VEHICLE_ONLY -> "只报警车辆"
-                                    AlarmMode.PERSON_AND_VEHICLE -> "人员和车辆都报警"
+                                    AlarmMode.PERSON_ONLY -> "只报警人员" // 中文: 只报警人员
+                                    AlarmMode.VEHICLE_ONLY -> "只报警车辆" // 中文: 只报警车辆
+                                    AlarmMode.PERSON_AND_VEHICLE -> "人员和车辆都报警" // 中文: 人员和车辆都报警
                                 },
                                 style = MaterialTheme.typography.bodyLarge,
                                 modifier = Modifier.padding(start = 16.dp)
@@ -493,20 +491,20 @@ fun SettingsDialog(
                 }
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Text("持续识别触发报警 (ms): ${continuousDetectionDurationMsState.value}") // 使用 .value
+                Text("持续识别触发报警 (ms): ${continuousDetectionDurationMsState.value}") // 中文: 持续识别触发报警 (ms)
                 Slider(
-                    value = continuousDetectionDurationMsState.value.toFloat(), // 使用 .value
-                    onValueChange = { continuousDetectionDurationMsState.value = it.roundToLong() }, // 使用 .value
+                    value = continuousDetectionDurationMsState.value.toFloat(),
+                    onValueChange = { continuousDetectionDurationMsState.value = it.roundToLong() },
                     valueRange = 500f..10000f,
                     steps = ((10000f - 500f) / 500f).toInt() - 1
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
-                Text("注意: 更改参数后，模型和报警逻辑会更新。", fontSize = 12.sp, style = MaterialTheme.typography.labelSmall)
+                Text("注意: 更改参数后，模型和报警逻辑会更新。", fontSize = 12.sp, style = MaterialTheme.typography.labelSmall) // 中文: 注意: 更改参数后，模型和报警逻辑会更新。
             }
         },
         confirmButton = {
-            Button(onClick = onDismiss) { Text("关闭") }
+            Button(onClick = onDismiss) { Text("关闭") } // 中文: 关闭
         }
     )
 }
@@ -521,13 +519,13 @@ fun PermissionDeniedContent(cameraPermissionState: PermissionState, modifier: Mo
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            text = "相机权限被拒绝。请在设置中启用。",
+            text = "相机权限被拒绝。请在设置中启用。", // 中文: 相机权限被拒绝。请在设置中启用。
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(bottom = 8.dp)
         )
         Button(onClick = {
             cameraPermissionState.launchPermissionRequest()
-        }) { Text("再次请求权限") }
+        }) { Text("再次请求权限") } // 中文: 再次请求权限
     }
 }
 

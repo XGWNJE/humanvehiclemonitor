@@ -1,15 +1,169 @@
-*.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+# =========================================================================
+# Android Studio 项目通用 .gitignore 文件
+# =========================================================================
+
+# -------------------------------------------------------------------------
+# 构建产生的文件和目录 (通常不需要版本控制)
+# -------------------------------------------------------------------------
+# Android Studio 和 Gradle 生成的构建输出目录
+/build/
+# 所有模块的构建输出目录 (例如 app/build, library/build)
+*/build/
+
+# APK 和 App Bundle 文件
+*.apk
+*.aab
+*.ap_
+
+# Dalvik 可执行文件
+*.dex
+
+# Java 类文件
+*.class
+
+# Lint 工具生成的报告
+lint-results-*.xml
+lint-results-*.html
+lint-results-*.txt
+
+# 测试报告
+test-results/
+*/build/reports/
+*/build/test-results/
+
+# -------------------------------------------------------------------------
+# 本地配置文件和敏感信息 (非常重要！确保不提交这些文件)
+# -------------------------------------------------------------------------
+# 包含本地 SDK 路径、NDK 路径、API 密钥等敏感信息的本地属性文件
+# !!! 强烈建议不要提交此文件 !!!
 local.properties
+
+# -------------------------------------------------------------------------
+# IDE 和编辑器相关文件 (通常是用户特定的配置)
+# -------------------------------------------------------------------------
+# IntelliJ IDEA / Android Studio 项目文件
+.idea/
+# 排除一些可以共享的 .idea 文件 (如果团队成员使用相同配置)
+# !.idea/codeStyles/ # 代码风格可以共享
+# !.idea/copyright/ # 版权信息可以共享
+# !.idea/dictionaries/ # 共享字典
+# !.idea/gradle.xml # Gradle 相关配置可以共享
+# !.idea/misc.xml # 其他一些可以共享的配置
+# !.idea/vcs.xml # 版本控制相关配置可以共享
+# !.idea/jarRepositories.xml # Jar 仓库配置
+
+# IntelliJ IDEA / Android Studio 的工作区文件 (包含个人窗口布局等)
+.idea/workspace.xml
+# IntelliJ IDEA / Android Studio 的任务文件 (个人任务列表)
+.idea/tasks.xml
+# IntelliJ IDEA / Android Studio 的模块文件 (每个模块一个，通常是自动生成的)
+*.iml
+# Android Studio 4.0+ 可能会有 .idea/deployment.xml
+.idea/deployment.xml
+
+# Gradle 相关文件
+.gradle/ # Gradle 的本地缓存和守护进程文件
+# Gradle Wrapper 的 Jar 文件 (通常建议提交 gradlew, gradlew.bat 和 gradle/wrapper/gradle-wrapper.properties)
+# 但如果你的网络环境不好，或者想强制所有开发者使用特定版本的 wrapper jar，可以考虑不忽略它
+# !gradle/wrapper/gradle-wrapper.jar
+
+# Google Services (例如 Firebase)
+# 如果你的 google-services.json 文件包含特定于开发环境的配置，或者你不想公开它，
+# 并且你有其他方式在 CI/CD 或其他开发者那里提供这个文件，那么可以取消下面一行的注释。
+# 通常情况下，如果这个文件不包含敏感信息，是可以提交的。
+# google-services.json
+
+# -------------------------------------------------------------------------
+# 操作系统生成的文件
+# -------------------------------------------------------------------------
+# macOS
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+*.swp
+*.swo
+
+# -------------------------------------------------------------------------
+# 密钥库文件 (非常重要！绝不能提交到公共仓库)
+# -------------------------------------------------------------------------
+# Java KeyStore 文件，用于应用签名
+*.jks
+*.keystore
+# 如果你将密钥信息存储在其他类型的文件中，也请在此处添加
+# 例如：
+# private_key.pem
+# release.signing.properties (如果包含密码)
+
+# -------------------------------------------------------------------------
+# 日志文件和临时文件
+# -------------------------------------------------------------------------
+*.log
+*.tmp
+*.temp
+
+# -------------------------------------------------------------------------
+# NDK 相关文件 (如果你的项目使用 NDK)
+# -------------------------------------------------------------------------
+.cxx/ # CMake 和 ndk-build 生成的中间文件
+*/build/intermediates/cxx/
+*/src/main/jniLibs/ # 通常预编译的 .so 文件会放在这里，根据情况决定是否忽略
+                    # 如果这些 .so 文件是第三方提供的，并且你希望版本控制它们，则不要忽略
+                    # 如果它们是你自己编译的，并且可以通过构建过程重新生成，则可以忽略
+
+# -------------------------------------------------------------------------
+# 特定库或工具生成的文件
+# -------------------------------------------------------------------------
+# Crashlytics (旧版 Fabric)
+com_crashlytics_export_strings.xml
+crashlytics.properties
+crashlytics-build.properties
+fabric.properties
+
+# Realm 数据库文件
+*.realm.lock
+*.realm.management
+*.realm.note
+*.realm
+
+# -------------------------------------------------------------------------
+# 用户自定义忽略规则 (你需要根据你的项目情况进行修改或添加)
+# -------------------------------------------------------------------------
+# 例如：
+# - 特定于你项目的临时文件或目录
+# my_temp_folder/
+# *.my_temp_extension
+#
+# - 一些你不想提交的配置文件副本
+# config.json.example (提交这个模板)
+# config.json (忽略这个实际配置文件)
+#
+# - 特定模块或功能的生成文件
+# /my_module/generated_code/
+#
+# - 如果你有一些本地测试数据不想提交
+# /test_data/large_dataset.csv
+
+# -------------------------------------------------------------------------
+# 取消忽略特定文件 (如果某个文件被上面的规则忽略了，但你确实想提交它)
+# -------------------------------------------------------------------------
+# 例如，如果你想提交某个特定的 .log 文件：
+# !important_debug.log
+#
+# 例如，如果你想提交 .idea 目录下的代码风格配置，但 .idea/ 被忽略了：
+# !.idea/codeStyles/
+# !.idea/codeStyles/Project.xml
+# !.idea/codeStyles/codeStyleConfig.xml
+# (注意：如果你在上面选择不忽略 .idea/codeStyles/，这里就不需要再写)
+
+# =========================================================================
+# 文件结束
+# =========================================================================
