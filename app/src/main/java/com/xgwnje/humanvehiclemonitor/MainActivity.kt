@@ -31,7 +31,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider // 修改点: 添加导入
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableFloatState
@@ -63,6 +63,9 @@ import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
 import com.xgwnje.humanvehiclemonitor.composables.ResultsOverlay
 import com.xgwnje.humanvehiclemonitor.composables.StatusAndControlsView
+// import com.xgwnje.humanvehiclemonitor.composables.SettingsDialog // Assuming this is not used if defined locally
+// import com.xgwnje.humanvehiclemonitor.composables.CameraPermissionRationaleDialog // Assuming this is not used if defined locally
+// import com.xgwnje.humanvehiclemonitor.composables.PermissionDeniedContent // Assuming this is not used if defined locally
 import com.xgwnje.humanvehiclemonitor.objectdetector.ObjectDetectorHelper
 import com.xgwnje.humanvehiclemonitor.objectdetector.ObjectDetectorListener
 import com.xgwnje.humanvehiclemonitor.ui.theme.HumanVehicleMonitorTheme
@@ -313,7 +316,7 @@ fun MainScreen() {
     }
 
     if (showRationaleDialog) {
-        CameraPermissionRationaleDialog(
+        CameraPermissionRationaleDialog( // Defined below in this file
             onDismiss = { showRationaleDialog = false },
             onConfirm = {
                 showRationaleDialog = false
@@ -323,7 +326,7 @@ fun MainScreen() {
     }
 
     if (showSettingsDialog) {
-        SettingsDialog(
+        SettingsDialog( // Defined below in this file
             currentThreshold = currentThreshold,
             currentMaxResults = currentMaxResults,
             currentDelegate = currentDelegate,
@@ -335,31 +338,39 @@ fun MainScreen() {
         )
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize()) { // RootBox
         if (cameraPermissionState.status.isGranted) {
-            CameraView(
-                objectDetectorHelper = objectDetectorHelper,
-                isPreviewEnabled = isPreviewEnabled
-                // Modifier for CameraView is handled internally by its BoxWithConstraints
-            )
-            if (isPreviewEnabled && imageWidthForOverlay > 0 && imageHeightForOverlay > 0) {
-                ResultsOverlay(
-                    results = detectionResults,
-                    imageHeight = imageHeightForOverlay,
-                    imageWidth = imageWidthForOverlay,
-                    personLabels = PERSON_LABELS,
-                    vehicleLabels = VEHICLE_LABELS,
-                    modifier = Modifier.fillMaxSize()
+            // This Box wrapper helps ensure the CameraView and ResultsOverlay group is centered.
+            // CameraView itself will fill this Box and center its 4:3 preview internally.
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center // ADDED: This centers its children if they don't fill all space.
+                // CameraView and ResultsOverlay will fill this space.
+            ) {
+                CameraView(
+                    objectDetectorHelper = objectDetectorHelper,
+                    isPreviewEnabled = isPreviewEnabled
+                    // CameraView internally handles its 4:3 aspect ratio and centers its AndroidView
                 )
-            } else if (isPreviewEnabled) {
-                Log.d(mainScreenTag, "预览已启用，但叠加层尺寸无效或结果为空，不绘制叠加层。W:$imageWidthForOverlay H:$imageHeightForOverlay Results Null: ${detectionResults == null}")
+                if (isPreviewEnabled && imageWidthForOverlay > 0 && imageHeightForOverlay > 0) {
+                    ResultsOverlay(
+                        results = detectionResults,
+                        imageHeight = imageHeightForOverlay,
+                        imageWidth = imageWidthForOverlay,
+                        personLabels = PERSON_LABELS,
+                        vehicleLabels = VEHICLE_LABELS,
+                        modifier = Modifier.fillMaxSize() // ResultsOverlay fills this centered Box
+                    )
+                }
             }
         } else {
-            PermissionDeniedContent(
+            PermissionDeniedContent( // Defined below in this file
                 cameraPermissionState = cameraPermissionState,
-                modifier = Modifier.align(Alignment.Center)
+                modifier = Modifier.align(Alignment.Center) // Aligns this within the RootBox
             )
         }
+
+        // StatusAndControlsView is placed last to be on top, and handles its own alignment
         StatusAndControlsView(
             detectionError = detectionError,
             currentStatusText = currentStatusText,
@@ -391,10 +402,14 @@ fun MainScreen() {
             },
             onShowSettingsDialog = { showSettingsDialog = true },
             mainScreenTag = mainScreenTag,
-            modifier = Modifier.fillMaxSize() // StatusAndControlsView fills the screen to handle its own padding and alignment
+            modifier = Modifier.fillMaxSize()
         )
     }
 }
+
+// These composables are defined in MainActivity as per the user's uploaded file.
+// If they were meant to be from com.xgwnje.humanvehiclemonitor.composables package,
+// the imports at the top should be uncommented and these definitions removed.
 
 @Composable
 fun CameraPermissionRationaleDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
@@ -416,7 +431,7 @@ fun SettingsDialog(
     currentDetectionIntervalMillis: MutableLongState,
     currentAlarmMode: AlarmMode,
     onAlarmModeChange: (AlarmMode) -> Unit,
-    continuousDetectionDurationMsState: MutableLongState,
+    continuousDetectionDurationMsState: MutableLongState, // Changed from separate params to match MainScreen's state object
     onDismiss: () -> Unit
 ) {
     val df = remember { DecimalFormat("#.##") }
@@ -426,10 +441,10 @@ fun SettingsDialog(
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(vertical = 8.dp)) {
                 Text("模型参数", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
-                Text("置信度阈值: ${df.format(currentThreshold.value)}")
+                Text("置信度阈值: ${df.format(currentThreshold.value)}") // .value for MutableFloatState
                 Slider(value = currentThreshold.value, onValueChange = { currentThreshold.value = it }, valueRange = 0.1f..0.9f, steps = 79)
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("最大结果数: ${currentMaxResults.value}")
+                Text("最大结果数: ${currentMaxResults.value}") // .value for MutableIntState
                 Slider(value = currentMaxResults.value.toFloat(), onValueChange = { currentMaxResults.value = it.toInt() }, valueRange = 1f..10f, steps = 8)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("推理代理:")
@@ -438,7 +453,7 @@ fun SettingsDialog(
                     Button(onClick = { currentDelegate.value = ObjectDetectorHelper.DELEGATE_GPU }, enabled = currentDelegate.value != ObjectDetectorHelper.DELEGATE_GPU, modifier = Modifier.weight(1f)) { Text("GPU") }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("模型识别间隔 (ms): ${currentDetectionIntervalMillis.value}")
+                Text("模型识别间隔 (ms): ${currentDetectionIntervalMillis.value}") // .value for MutableLongState
                 Slider(value = currentDetectionIntervalMillis.value.toFloat(), onValueChange = { currentDetectionIntervalMillis.value = it.roundToLong() }, valueRange = 0f..1000f, steps = ((1000f - 0f) / 50f).toInt() - 1)
                 Spacer(modifier = Modifier.height(24.dp))
                 Divider()
@@ -458,7 +473,7 @@ fun SettingsDialog(
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("持续识别触发报警 (ms): ${continuousDetectionDurationMsState.value}")
+                Text("持续识别触发报警 (ms): ${continuousDetectionDurationMsState.value}") // .value for MutableLongState
                 Slider(value = continuousDetectionDurationMsState.value.toFloat(), onValueChange = { continuousDetectionDurationMsState.value = it.roundToLong() }, valueRange = 500f..10000f, steps = ((10000f - 500f) / 500f).toInt() - 1)
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("注意: 更改参数后，模型和报警逻辑会更新。", fontSize = 12.sp, style = MaterialTheme.typography.labelSmall)
@@ -483,7 +498,7 @@ fun DefaultPreviewLandscape() {
     HumanVehicleMonitorTheme {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             val landscapeConfiguration = Configuration().apply { orientation = Configuration.ORIENTATION_LANDSCAPE }
-            CompositionLocalProvider(LocalConfiguration provides landscapeConfiguration) { // Fixed: Added import
+            CompositionLocalProvider(LocalConfiguration provides landscapeConfiguration) {
                 MainScreen()
             }
         }
