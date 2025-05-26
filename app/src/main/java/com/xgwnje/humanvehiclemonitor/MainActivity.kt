@@ -72,7 +72,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         Log.i(TAG, "onCreate: Activity 创建。") // 中文日志: Activity 创建。
 
-        // 移除 MediaPlayer 初始化
+
         // mediaPlayer = MediaPlayer.create(this, R.raw.alarm_sound) ...
 
         setContent {
