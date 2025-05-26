@@ -378,8 +378,8 @@ class ObjectDetectorHelper(
         const val TAG = "ObjectDetectorHelper"
         const val DELEGATE_CPU = 0
         const val DELEGATE_GPU = 1
-        const val DEFAULT_THRESHOLD = 0.4f
-        const val DEFAULT_MAX_RESULTS = 5
+        const val DEFAULT_THRESHOLD = 0.6f
+        const val DEFAULT_MAX_RESULTS = 1
         const val DEFAULT_DETECTION_INTERVAL_MS: Long = 200
         const val OTHER_ERROR = 0
         const val GPU_ERROR_INIT_FAIL = 1

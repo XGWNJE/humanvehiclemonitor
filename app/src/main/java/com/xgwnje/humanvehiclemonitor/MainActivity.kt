@@ -8,81 +8,52 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Divider
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableFloatState
-import androidx.compose.runtime.MutableIntState
-import androidx.compose.runtime.MutableLongState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionState
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
 import com.xgwnje.humanvehiclemonitor.composables.ResultsOverlay
+import com.xgwnje.humanvehiclemonitor.composables.SettingsScreen
 import com.xgwnje.humanvehiclemonitor.composables.StatusAndControlsView
-// import com.xgwnje.humanvehiclemonitor.composables.SettingsDialog // Assuming this is not used if defined locally
-// import com.xgwnje.humanvehiclemonitor.composables.CameraPermissionRationaleDialog // Assuming this is not used if defined locally
-// import com.xgwnje.humanvehiclemonitor.composables.PermissionDeniedContent // Assuming this is not used if defined locally
 import com.xgwnje.humanvehiclemonitor.objectdetector.ObjectDetectorHelper
 import com.xgwnje.humanvehiclemonitor.objectdetector.ObjectDetectorListener
 import com.xgwnje.humanvehiclemonitor.ui.theme.HumanVehicleMonitorTheme
-import java.text.DecimalFormat
-import kotlin.math.roundToLong
 import org.tensorflow.lite.task.vision.detector.Detection
 
-// 定义报警模式的枚举
+// 定义报警模式的枚举 - 重新添加到文件顶层
 enum class AlarmMode {
     PERSON_ONLY,
     VEHICLE_ONLY,
     PERSON_AND_VEHICLE
 }
 
-// 定义目标标签
+// 定义目标标签 - 重新添加到文件顶层
 val PERSON_LABELS = setOf("person")
 val VEHICLE_LABELS = setOf("car", "motorcycle", "bicycle", "bus", "truck", "vehicle")
+
+
+// 定义导航路由
+object AppDestinations {
+    const val MAIN_SCREEN_ROUTE = "main"
+    const val SETTINGS_SCREEN_ROUTE = "settings"
+}
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -91,7 +62,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Log.i(TAG, "onCreate: Activity 创建。屏幕方向固定为横向。")
+        Log.i(TAG, "onCreate: Activity 创建。")
 
         setContent {
             HumanVehicleMonitorTheme {
@@ -100,12 +71,12 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     Log.d(TAG, "setContent: HumanVehicleMonitorTheme 和 Surface 已应用。")
-                    MainScreen()
+                    AppNavigation()
                 }
             }
         }
     }
-
+    // onStart, onResume, onPause, onStop, onDestroy 保持不变
     override fun onStart() {
         super.onStart()
         Log.i(TAG, "onStart: Activity 启动。")
@@ -132,12 +103,71 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@Composable
+fun AppNavigation() {
+    val navController = rememberNavController()
+    val mainScreenTag = "AppNavigation(TFLite)"
+
+    val currentThreshold = rememberSaveable { mutableFloatStateOf(ObjectDetectorHelper.DEFAULT_THRESHOLD) }
+    val currentMaxResults = rememberSaveable { mutableIntStateOf(ObjectDetectorHelper.DEFAULT_MAX_RESULTS) }
+    val currentDelegate = rememberSaveable { mutableIntStateOf(ObjectDetectorHelper.DELEGATE_CPU) }
+    val currentDetectionIntervalMillis = rememberSaveable { mutableLongStateOf(ObjectDetectorHelper.DEFAULT_DETECTION_INTERVAL_MS) }
+    var alarmMode by rememberSaveable { mutableStateOf(AlarmMode.PERSON_AND_VEHICLE) } // 现在可以正确引用 AlarmMode
+    val continuousDetectionDurationMsState = rememberSaveable { mutableLongStateOf(3000L) }
+
+    LaunchedEffect(
+        currentThreshold.value,
+        currentMaxResults.value,
+        currentDelegate.value,
+        currentDetectionIntervalMillis.value
+    ) {
+        Log.i(mainScreenTag, "全局参数已更改: T=${currentThreshold.value}, M=${currentMaxResults.value}, D=${currentDelegate.value}, I=${currentDetectionIntervalMillis.value}")
+    }
+
+    NavHost(navController = navController, startDestination = AppDestinations.MAIN_SCREEN_ROUTE) {
+        composable(AppDestinations.MAIN_SCREEN_ROUTE) {
+            MainScreenContent(
+                navController = navController,
+                currentThreshold = currentThreshold,
+                currentMaxResults = currentMaxResults,
+                currentDelegate = currentDelegate,
+                currentDetectionIntervalMillis = currentDetectionIntervalMillis,
+                alarmMode = alarmMode,
+                continuousDetectionDurationMsState = continuousDetectionDurationMsState,
+                onAlarmModeChange = { newMode -> alarmMode = newMode }
+            )
+        }
+        composable(AppDestinations.SETTINGS_SCREEN_ROUTE) {
+            SettingsScreen(
+                currentThreshold = currentThreshold,
+                currentMaxResults = currentMaxResults,
+                currentDelegate = currentDelegate,
+                currentDetectionIntervalMillis = currentDetectionIntervalMillis,
+                currentAlarmMode = alarmMode,
+                onAlarmModeChange = { newMode -> alarmMode = newMode },
+                continuousDetectionDurationMsState = continuousDetectionDurationMsState,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+    }
+}
+
+
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun MainScreen() {
+fun MainScreenContent(
+    navController: NavController,
+    currentThreshold: MutableFloatState,
+    currentMaxResults: MutableIntState,
+    currentDelegate: MutableIntState,
+    currentDetectionIntervalMillis: MutableLongState,
+    alarmMode: AlarmMode,
+    continuousDetectionDurationMsState: MutableLongState,
+    onAlarmModeChange: (AlarmMode) -> Unit
+) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val mainScreenTag = "MainScreen(TFLite)"
+    val mainScreenTag = "MainScreenContent(TFLite)"
 
     val cameraPermissionState: PermissionState =
         rememberPermissionState(Manifest.permission.CAMERA)
@@ -154,29 +184,19 @@ fun MainScreen() {
     var isPreviewEnabled by rememberSaveable { mutableStateOf(true) }
     var isMonitoringActive by rememberSaveable { mutableStateOf(false) }
 
-    var alarmMode by rememberSaveable { mutableStateOf(AlarmMode.PERSON_AND_VEHICLE) }
-    val continuousDetectionDurationMsState = rememberSaveable { mutableLongStateOf(3000L) }
-
     val continuouslyDetectedTargets = remember { mutableStateMapOf<String, Long>() }
     val alarmedTargetsCoolDown = remember { mutableStateMapOf<String, Long>() }
     val alarmCoolDownMs = 10000L
-
     val defaultModelName = "2.tflite"
-    val currentThreshold = rememberSaveable { mutableFloatStateOf(ObjectDetectorHelper.DEFAULT_THRESHOLD) }
-    val currentMaxResults = rememberSaveable { mutableIntStateOf(ObjectDetectorHelper.DEFAULT_MAX_RESULTS) }
-    val currentDelegate = rememberSaveable { mutableIntStateOf(ObjectDetectorHelper.DELEGATE_CPU) }
-    val currentDetectionIntervalMillis = rememberSaveable { mutableLongStateOf(ObjectDetectorHelper.DEFAULT_DETECTION_INTERVAL_MS) }
 
-    var showSettingsDialog by rememberSaveable { mutableStateOf(false) }
-
-    LaunchedEffect(currentThreshold.floatValue, currentMaxResults.intValue, currentDelegate.intValue, currentDetectionIntervalMillis.longValue) {
+    LaunchedEffect(currentThreshold.value, currentMaxResults.value, currentDelegate.value, currentDetectionIntervalMillis.value) {
         Log.i(mainScreenTag, "检测参数已更改或首次初始化参数观察。正在重置UI检测状态。")
         detectionResults = null
         imageWidthForOverlay = 0
         imageHeightForOverlay = 0
         inferenceTime = 0L
         detectionError = null
-        Log.d(mainScreenTag, "UI检测状态已重置。imageWidthForOverlay: $imageWidthForOverlay")
+        Log.d(mainScreenTag, "UI检测状态已重置。")
     }
 
     val objectDetectorListener = remember {
@@ -193,14 +213,12 @@ fun MainScreen() {
 
             override fun onResults(resultBundle: ObjectDetectorHelper.ResultBundle?) {
                 val currentTimeMs = SystemClock.uptimeMillis()
-
                 if (resultBundle != null) {
                     imageWidthForOverlay = resultBundle.inputImageWidth
                     imageHeightForOverlay = resultBundle.inputImageHeight
                     inferenceTime = resultBundle.inferenceTime
                     detectionResults = resultBundle.results
                     detectionError = null
-
                     var statusUpdatedByAlarm = false
                     if (isMonitoringActive) {
                         val currentFrameDetectedLabels = mutableSetOf<String>()
@@ -208,9 +226,9 @@ fun MainScreen() {
                             detection.categories.firstOrNull()?.label?.let { label ->
                                 val normalizedLabel = label.lowercase().trim()
                                 currentFrameDetectedLabels.add(normalizedLabel)
-                                val isPerson = PERSON_LABELS.contains(normalizedLabel)
-                                val isVehicle = VEHICLE_LABELS.any { vehicleLabel -> normalizedLabel.contains(vehicleLabel) }
-                                val shouldProcessThisTarget = when (alarmMode) {
+                                val isPerson = PERSON_LABELS.contains(normalizedLabel) // 现在可以正确引用
+                                val isVehicle = VEHICLE_LABELS.any { vehicleLabel -> normalizedLabel.contains(vehicleLabel) } // 现在可以正确引用
+                                val shouldProcessThisTarget = when (alarmMode) { // 现在可以正确引用 AlarmMode
                                     AlarmMode.PERSON_ONLY -> isPerson
                                     AlarmMode.VEHICLE_ONLY -> isVehicle
                                     AlarmMode.PERSON_AND_VEHICLE -> isPerson || isVehicle
@@ -235,15 +253,12 @@ fun MainScreen() {
                         }
                         val labelsToRemove = continuouslyDetectedTargets.keys.filterNot { trackingKey ->
                             when(trackingKey) {
-                                "人员" -> PERSON_LABELS.any { label -> currentFrameDetectedLabels.any { detected -> detected == label } }
-                                "车辆" -> VEHICLE_LABELS.any { label -> currentFrameDetectedLabels.any { detected -> detected.contains(label) } }
+                                "人员" -> PERSON_LABELS.any { label -> currentFrameDetectedLabels.any { detected -> detected == label } } // 现在可以正确引用
+                                "车辆" -> VEHICLE_LABELS.any { label -> currentFrameDetectedLabels.any { detected -> detected.contains(label) } } // 现在可以正确引用
                                 else -> currentFrameDetectedLabels.contains(trackingKey)
                             }
                         }
-                        labelsToRemove.forEach {
-                            continuouslyDetectedTargets.remove(it)
-                            Log.d(mainScreenTag, "目标类别 '$it' 从持续检测列表中移除，因当前帧未检测到。")
-                        }
+                        labelsToRemove.forEach { continuouslyDetectedTargets.remove(it) }
                     } else {
                         continuouslyDetectedTargets.clear()
                     }
@@ -268,9 +283,7 @@ fun MainScreen() {
                             lastUiUpdateTime = currentTimeMs
                         }
                     }
-                    if (isMonitoringActive) {
-                        continuouslyDetectedTargets.clear()
-                    }
+                    if (isMonitoringActive) { continuouslyDetectedTargets.clear() }
                 }
             }
         }
@@ -278,21 +291,21 @@ fun MainScreen() {
 
     val objectDetectorHelper = remember(
         context,
-        currentThreshold.floatValue,
-        currentMaxResults.intValue,
-        currentDelegate.intValue,
-        currentDetectionIntervalMillis.longValue,
+        currentThreshold.value,
+        currentMaxResults.value,
+        currentDelegate.value,
+        currentDetectionIntervalMillis.value,
         defaultModelName
     ) {
-        Log.i(mainScreenTag, "ObjectDetectorHelper: 创建/重新创建实例。Threshold: ${currentThreshold.floatValue}, MaxResults: ${currentMaxResults.intValue}, Delegate: ${currentDelegate.intValue}, Interval: ${currentDetectionIntervalMillis.longValue}ms")
+        Log.i(mainScreenTag, "ObjectDetectorHelper: 创建/重新创建实例。T: ${currentThreshold.value}, M: ${currentMaxResults.value}, D: ${currentDelegate.value}, I: ${currentDetectionIntervalMillis.value}ms")
         ObjectDetectorHelper(
             context = context,
             objectDetectorListener = objectDetectorListener,
-            threshold = currentThreshold.floatValue,
-            maxResults = currentMaxResults.intValue,
-            currentDelegate = currentDelegate.intValue,
+            threshold = currentThreshold.value,
+            maxResults = currentMaxResults.value,
+            currentDelegate = currentDelegate.value,
             modelName = defaultModelName,
-            detectionIntervalMillis = currentDetectionIntervalMillis.longValue
+            detectionIntervalMillis = currentDetectionIntervalMillis.value
         )
     }
 
@@ -316,7 +329,7 @@ fun MainScreen() {
     }
 
     if (showRationaleDialog) {
-        CameraPermissionRationaleDialog( // Defined below in this file
+        CameraPermissionRationaleDialog(
             onDismiss = { showRationaleDialog = false },
             onConfirm = {
                 showRationaleDialog = false
@@ -325,68 +338,47 @@ fun MainScreen() {
         )
     }
 
-    if (showSettingsDialog) {
-        SettingsDialog( // Defined below in this file
-            currentThreshold = currentThreshold,
-            currentMaxResults = currentMaxResults,
-            currentDelegate = currentDelegate,
-            currentDetectionIntervalMillis = currentDetectionIntervalMillis,
-            currentAlarmMode = alarmMode,
-            onAlarmModeChange = { newMode -> alarmMode = newMode },
-            continuousDetectionDurationMsState = continuousDetectionDurationMsState,
-            onDismiss = { showSettingsDialog = false }
-        )
-    }
-
-    Box(modifier = Modifier.fillMaxSize()) { // RootBox
+    Box(modifier = Modifier.fillMaxSize()) {
         if (cameraPermissionState.status.isGranted) {
-            // This Box wrapper helps ensure the CameraView and ResultsOverlay group is centered.
-            // CameraView itself will fill this Box and center its 4:3 preview internally.
             Box(
                 modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center // ADDED: This centers its children if they don't fill all space.
-                // CameraView and ResultsOverlay will fill this space.
+                contentAlignment = Alignment.Center
             ) {
-                CameraView(
+                CameraView( // 假设 CameraView.kt 已经存在并且可以被引用
                     objectDetectorHelper = objectDetectorHelper,
                     isPreviewEnabled = isPreviewEnabled
-                    // CameraView internally handles its 4:3 aspect ratio and centers its AndroidView
                 )
                 if (isPreviewEnabled && imageWidthForOverlay > 0 && imageHeightForOverlay > 0) {
                     ResultsOverlay(
                         results = detectionResults,
                         imageHeight = imageHeightForOverlay,
                         imageWidth = imageWidthForOverlay,
-                        personLabels = PERSON_LABELS,
-                        vehicleLabels = VEHICLE_LABELS,
-                        modifier = Modifier.fillMaxSize() // ResultsOverlay fills this centered Box
+                        personLabels = PERSON_LABELS, // 现在可以正确引用
+                        vehicleLabels = VEHICLE_LABELS, // 现在可以正确引用
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
             }
         } else {
-            PermissionDeniedContent( // Defined below in this file
+            PermissionDeniedContent(
                 cameraPermissionState = cameraPermissionState,
-                modifier = Modifier.align(Alignment.Center) // Aligns this within the RootBox
+                modifier = Modifier.align(Alignment.Center)
             )
         }
 
-        // StatusAndControlsView is placed last to be on top, and handles its own alignment
         StatusAndControlsView(
             detectionError = detectionError,
             currentStatusText = currentStatusText,
             inferenceTime = inferenceTime,
-            currentThresholdValue = currentThreshold.floatValue,
-            currentMaxResultsValue = currentMaxResults.intValue,
-            currentDelegateValue = currentDelegate.intValue,
-            currentDetectionIntervalMillisValue = currentDetectionIntervalMillis.longValue,
+            currentThresholdValue = currentThreshold.value,
+            currentMaxResultsValue = currentMaxResults.value,
+            currentDelegateValue = currentDelegate.value,
+            currentDetectionIntervalMillisValue = currentDetectionIntervalMillis.value,
             isPreviewEnabled = isPreviewEnabled,
             isMonitoringActive = isMonitoringActive,
             onTogglePreview = {
                 isPreviewEnabled = !isPreviewEnabled
-                Log.i(mainScreenTag, "预览切换为: $isPreviewEnabled")
-                if (!isPreviewEnabled) {
-                    detectionResults = null
-                }
+                if (!isPreviewEnabled) { detectionResults = null }
             },
             onToggleMonitoring = {
                 isMonitoringActive = !isMonitoringActive
@@ -400,16 +392,14 @@ fun MainScreen() {
                     Log.i(mainScreenTag, "监控已停止。")
                 }
             },
-            onShowSettingsDialog = { showSettingsDialog = true },
+            onNavigateToSettings = {
+                navController.navigate(AppDestinations.SETTINGS_SCREEN_ROUTE)
+            },
             mainScreenTag = mainScreenTag,
             modifier = Modifier.fillMaxSize()
         )
     }
 }
-
-// These composables are defined in MainActivity as per the user's uploaded file.
-// If they were meant to be from com.xgwnje.humanvehiclemonitor.composables package,
-// the imports at the top should be uncommented and these definitions removed.
 
 @Composable
 fun CameraPermissionRationaleDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
@@ -422,67 +412,6 @@ fun CameraPermissionRationaleDialog(onDismiss: () -> Unit, onConfirm: () -> Unit
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun SettingsDialog(
-    currentThreshold: MutableFloatState,
-    currentMaxResults: MutableIntState,
-    currentDelegate: MutableIntState,
-    currentDetectionIntervalMillis: MutableLongState,
-    currentAlarmMode: AlarmMode,
-    onAlarmModeChange: (AlarmMode) -> Unit,
-    continuousDetectionDurationMsState: MutableLongState, // Changed from separate params to match MainScreen's state object
-    onDismiss: () -> Unit
-) {
-    val df = remember { DecimalFormat("#.##") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("调整参数和报警设置") },
-        text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(vertical = 8.dp)) {
-                Text("模型参数", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
-                Text("置信度阈值: ${df.format(currentThreshold.value)}") // .value for MutableFloatState
-                Slider(value = currentThreshold.value, onValueChange = { currentThreshold.value = it }, valueRange = 0.1f..0.9f, steps = 79)
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("最大结果数: ${currentMaxResults.value}") // .value for MutableIntState
-                Slider(value = currentMaxResults.value.toFloat(), onValueChange = { currentMaxResults.value = it.toInt() }, valueRange = 1f..10f, steps = 8)
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("推理代理:")
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
-                    Button(onClick = { currentDelegate.value = ObjectDetectorHelper.DELEGATE_CPU }, enabled = currentDelegate.value != ObjectDetectorHelper.DELEGATE_CPU, modifier = Modifier.weight(1f)) { Text("CPU") }
-                    Button(onClick = { currentDelegate.value = ObjectDetectorHelper.DELEGATE_GPU }, enabled = currentDelegate.value != ObjectDetectorHelper.DELEGATE_GPU, modifier = Modifier.weight(1f)) { Text("GPU") }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("模型识别间隔 (ms): ${currentDetectionIntervalMillis.value}") // .value for MutableLongState
-                Slider(value = currentDetectionIntervalMillis.value.toFloat(), onValueChange = { currentDetectionIntervalMillis.value = it.roundToLong() }, valueRange = 0f..1000f, steps = ((1000f - 0f) / 50f).toInt() - 1)
-                Spacer(modifier = Modifier.height(24.dp))
-                Divider()
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("报警设置", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
-                Text("报警模式:")
-                Column(Modifier.selectableGroup()) {
-                    AlarmMode.values().forEach { mode ->
-                        Row(Modifier.fillMaxWidth().height(48.dp).selectable(selected = (mode == currentAlarmMode), onClick = { onAlarmModeChange(mode) }, role = Role.RadioButton).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(selected = (mode == currentAlarmMode), onClick = null)
-                            Text(text = when (mode) {
-                                AlarmMode.PERSON_ONLY -> "只报警人员"
-                                AlarmMode.VEHICLE_ONLY -> "只报警车辆"
-                                AlarmMode.PERSON_AND_VEHICLE -> "人员和车辆都报警"
-                            }, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 16.dp))
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("持续识别触发报警 (ms): ${continuousDetectionDurationMsState.value}") // .value for MutableLongState
-                Slider(value = continuousDetectionDurationMsState.value.toFloat(), onValueChange = { continuousDetectionDurationMsState.value = it.roundToLong() }, valueRange = 500f..10000f, steps = ((10000f - 500f) / 500f).toInt() - 1)
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("注意: 更改参数后，模型和报警逻辑会更新。", fontSize = 12.sp, style = MaterialTheme.typography.labelSmall)
-            }
-        },
-        confirmButton = { Button(onClick = onDismiss) { Text("关闭") } }
-    )
-}
-
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun PermissionDeniedContent(cameraPermissionState: PermissionState, modifier: Modifier = Modifier) {
@@ -492,14 +421,32 @@ fun PermissionDeniedContent(cameraPermissionState: PermissionState, modifier: Mo
     }
 }
 
-@Preview(showBackground = true, name = "Landscape Preview (TFLite)", widthDp = 800, heightDp = 390)
+
+@Preview(showBackground = true, name = "Landscape MainScreen Preview", widthDp = 800, heightDp = 390)
 @Composable
 fun DefaultPreviewLandscape() {
     HumanVehicleMonitorTheme {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             val landscapeConfiguration = Configuration().apply { orientation = Configuration.ORIENTATION_LANDSCAPE }
             CompositionLocalProvider(LocalConfiguration provides landscapeConfiguration) {
-                MainScreen()
+                val navController = rememberNavController()
+                val currentThreshold = rememberSaveable { mutableFloatStateOf(ObjectDetectorHelper.DEFAULT_THRESHOLD) }
+                val currentMaxResults = rememberSaveable { mutableIntStateOf(ObjectDetectorHelper.DEFAULT_MAX_RESULTS) }
+                val currentDelegate = rememberSaveable { mutableIntStateOf(ObjectDetectorHelper.DELEGATE_CPU) }
+                val currentDetectionIntervalMillis = rememberSaveable { mutableLongStateOf(ObjectDetectorHelper.DEFAULT_DETECTION_INTERVAL_MS) }
+                val alarmMode = AlarmMode.PERSON_AND_VEHICLE // 现在可以正确引用
+                val continuousDetectionDurationMsState = rememberSaveable { mutableLongStateOf(3000L) }
+
+                MainScreenContent(
+                    navController = navController,
+                    currentThreshold = currentThreshold,
+                    currentMaxResults = currentMaxResults,
+                    currentDelegate = currentDelegate,
+                    currentDetectionIntervalMillis = currentDetectionIntervalMillis,
+                    alarmMode = alarmMode,
+                    continuousDetectionDurationMsState = continuousDetectionDurationMsState,
+                    onAlarmModeChange = {}
+                )
             }
         }
     }

@@ -52,21 +52,21 @@ fun StatusAndControlsView(
     isMonitoringActive: Boolean,
     onTogglePreview: () -> Unit,
     onToggleMonitoring: () -> Unit,
-    onShowSettingsDialog: () -> Unit,
+    onNavigateToSettings: () -> Unit, // 修改: 回调名称更改
     mainScreenTag: String,
-    modifier: Modifier = Modifier // 修改点: 添加 modifier 参数
+    modifier: Modifier = Modifier
 ) {
     val df = remember { DecimalFormat("#.##") }
     val statusAndControlsViewTag = "StatusAndControlsView(TFLite)"
 
-    Log.d(statusAndControlsViewTag, "StatusAndControlsView: Composable recomposing. Always landscape. isPreviewEnabled: $isPreviewEnabled, isMonitoringActive: $isMonitoringActive") // 中文日志
+    Log.d(statusAndControlsViewTag, "StatusAndControlsView: Composable recomposing. isPreviewEnabled: $isPreviewEnabled, isMonitoringActive: $isMonitoringActive")
 
     val delegateString = if (currentDelegateValue == ObjectDetectorHelper.DELEGATE_CPU) "CPU" else "GPU"
     val intervalString = "${currentDetectionIntervalMillisValue}ms"
 
     val baseStatus = if (detectionError != null) {
-        Log.w(statusAndControlsViewTag, "显示错误状态: $detectionError") // 中文日志
-        "错误: $detectionError"
+        Log.w(statusAndControlsViewTag, "显示错误状态: $detectionError")
+        "错误: $detectionError" // 文本：错误
     } else {
         currentStatusText
     }
@@ -75,14 +75,14 @@ fun StatusAndControlsView(
     val combinedStatusText = "$baseStatus$inferenceDisplay$paramsDisplay"
 
     val buttonMinHeight = 48.dp
-    val previewButtonText = if (isPreviewEnabled) "关闭预览" else "开启预览" // 中文按钮文本
+    val previewButtonText = if (isPreviewEnabled) "关闭预览" else "开启预览" // 文本：关闭预览 / 开启预览
     val previewButtonIcon = if (isPreviewEnabled) Icons.Filled.VisibilityOff else Icons.Filled.Visibility
 
-    val monitorButtonText = if (isMonitoringActive) "停止监控" else "开始监控" // 中文按钮文本
+    val monitorButtonText = if (isMonitoringActive) "停止监控" else "开始监控" // 文本：停止监控 / 开始监控
     val monitorButtonIcon = if (isMonitoringActive) Icons.Filled.Stop else Icons.Filled.PlayArrow
 
     Row(
-        modifier = modifier // 使用传入的 modifier
+        modifier = modifier
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.Bottom
@@ -118,20 +118,20 @@ fun StatusAndControlsView(
 
             FilledTonalButton(
                 onClick = {
-                    Log.d(statusAndControlsViewTag, "设置按钮被点击。") // 中文日志
-                    onShowSettingsDialog()
+                    Log.d(statusAndControlsViewTag, "设置按钮被点击。导航到设置界面。") // 文本：设置按钮被点击。导航到设置界面。
+                    onNavigateToSettings() // 修改: 调用新的导航回调
                 },
                 modifier = landscapeButtonModifier,
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Icon(Icons.Filled.Settings, contentDescription = "调整参数", modifier = Modifier.size(ButtonDefaults.IconSize))
+                Icon(Icons.Filled.Settings, contentDescription = "调整参数", modifier = Modifier.size(ButtonDefaults.IconSize)) // 文本：调整参数
                 Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                Text("调参", fontSize = 14.sp) // 中文按钮文本
+                Text("调参", fontSize = 14.sp) // 文本：调参
             }
 
             Button(
                 onClick = {
-                    Log.d(statusAndControlsViewTag, "切换监控按钮被点击。当前状态: $isMonitoringActive -> ${!isMonitoringActive}") // 中文日志
+                    Log.d(statusAndControlsViewTag, "切换监控按钮被点击。当前状态: $isMonitoringActive -> ${!isMonitoringActive}")
                     onToggleMonitoring()
                 },
                 modifier = landscapeButtonModifier,
@@ -149,7 +149,7 @@ fun StatusAndControlsView(
 
             OutlinedButton(
                 onClick = {
-                    Log.d(statusAndControlsViewTag, "切换预览按钮被点击。当前状态: $isPreviewEnabled -> ${!isPreviewEnabled}") // 中文日志
+                    Log.d(statusAndControlsViewTag, "切换预览按钮被点击。当前状态: $isPreviewEnabled -> ${!isPreviewEnabled}")
                     onTogglePreview()
                 },
                 modifier = landscapeButtonModifier,
