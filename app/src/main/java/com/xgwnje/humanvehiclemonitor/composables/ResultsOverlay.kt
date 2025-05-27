@@ -3,169 +3,212 @@ package com.xgwnje.humanvehiclemonitor.composables
 
 import android.graphics.RectF
 import android.util.Log
-import android.view.Surface // 用于获取屏幕旋转状态
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Box
+import android.view.Surface
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer // 新增导入: 用于图形层变换
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView // 用于获取当前视图从而获取显示旋转
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.tensorflow.lite.task.vision.detector.Detection
-import kotlin.math.roundToInt
 
 @Composable
 fun ResultsOverlay(
     results: List<Detection>?,
-    imageHeight: Int, // 模型处理的（已旋转到垂直的）图像的高度
-    imageWidth: Int,  // 模型处理的（已旋转到垂直的）图像的宽度
+    imageHeightFromModel: Int,      // 模型处理的图像的高度 (Rot90Op 之后)
+    imageWidthFromModel: Int,       // 模型处理的图像的宽度 (Rot90Op 之后)
+    sourceImageRotationDegrees: Int,// 原始 ImageProxy 帧的旋转角度
     personLabels: Set<String>,
     vehicleLabels: Set<String>,
     modifier: Modifier = Modifier
 ) {
-    if (imageHeight == 0 || imageWidth == 0) {
-        Log.w("ResultsOverlay(TFLite)", "图像高度或宽度为零，不绘制覆盖层。ImageH: $imageHeight, ImageW: $imageWidth") // 中文日志
+    val overlayTag = "ResultsOverlay(MirrorFix)" // 更新 Tag
+
+    if (imageHeightFromModel == 0 || imageWidthFromModel == 0) {
+        Log.w(overlayTag, "模型图像高度或宽度为零。 H:$imageHeightFromModel, W:$imageWidthFromModel")
         return
     }
 
     val view = LocalView.current
     val displayRotation = view.display.rotation
-    // 判断是否为反向横屏
-    val isReverseLandscape = displayRotation == Surface.ROTATION_270
-    // Log.d("ResultsOverlay(TFLite)", "当前屏幕旋转: $displayRotation, isReverseLandscape: $isReverseLandscape") // 中文调试日志
+
+    Log.d(overlayTag, "DisplayRotation: $displayRotation, SourceImgOriginalRotation: $sourceImageRotationDegrees, ModelDims: ${imageWidthFromModel}w x ${imageHeightFromModel}h")
+
+    val textMeasurer = rememberTextMeasurer()
+    val labelTextColor = Color.White
+    val labelBackgroundColor = Color.Black.copy(alpha = 0.7f)
+    val boxColorPerson = Color.Green
+    val boxColorVehicle = Color.Blue
+    val strokeWidth = 2.dp
+    val textPadding = 2.dp
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        // BoxWithConstraints 根据当前方向提供可用的画布尺寸
         val canvasWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
         val canvasHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
 
         if (canvasWidthPx <= 0 || canvasHeightPx <= 0) {
-            Log.w("ResultsOverlay(TFLite)", "画布宽度或高度为零或负数。CanvasW: $canvasWidthPx, CanvasH: $canvasHeightPx") // 中文日志
+            Log.w(overlayTag, "画布尺寸无效。W:$canvasWidthPx, H:$canvasHeightPx")
             return@BoxWithConstraints
         }
 
-        // 计算缩放比例和偏移量，以将 imageWidth x imageHeight 的区域适应并居中到画布上
-        val imageAspectRatio = imageWidth.toFloat() / imageHeight.toFloat()
-        val canvasAspectRatio = canvasWidthPx / canvasHeightPx
+        val previewViewAspectRatio = canvasWidthPx / canvasHeightPx
+        val cameraContentAspectRatio = 4.0f / 3.0f
 
-        val scale: Float
-        val transformOffsetX: Float // 水平偏移，用于在画布上居中图像
-        val transformOffsetY: Float // 垂直偏移，用于在画布上居中图像
+        val actualPreviewContentWidthPx: Float
+        val actualPreviewContentHeightPx: Float
+        val offsetXForPreviewCenter: Float
+        val offsetYForPreviewCenter: Float
 
-        if (imageAspectRatio > canvasAspectRatio) { // 图像更宽 (letterbox)
-            scale = canvasWidthPx / imageWidth.toFloat()
-            transformOffsetX = 0f
-            transformOffsetY = (canvasHeightPx - (imageHeight.toFloat() * scale)) / 2f
-        } else { // 图像更高 (pillarbox)
-            scale = canvasHeightPx / imageHeight.toFloat()
-            transformOffsetY = 0f
-            transformOffsetX = (canvasWidthPx - (imageWidth.toFloat() * scale)) / 2f
+        if (previewViewAspectRatio > cameraContentAspectRatio) {
+            actualPreviewContentHeightPx = canvasHeightPx
+            actualPreviewContentWidthPx = actualPreviewContentHeightPx * cameraContentAspectRatio
+            offsetXForPreviewCenter = (canvasWidthPx - actualPreviewContentWidthPx) / 2f
+            offsetYForPreviewCenter = 0f
+        } else {
+            actualPreviewContentWidthPx = canvasWidthPx
+            actualPreviewContentHeightPx = actualPreviewContentWidthPx / cameraContentAspectRatio
+            offsetXForPreviewCenter = 0f
+            offsetYForPreviewCenter = (canvasHeightPx - actualPreviewContentHeightPx) / 2f
         }
+        Log.d(overlayTag, "Canvas: ${canvasWidthPx}x${canvasHeightPx}. Actual 4:3 Preview: ${actualPreviewContentWidthPx}x${actualPreviewContentHeightPx}, Offset: ($offsetXForPreviewCenter,$offsetYForPreviewCenter)")
 
-        // 这个内部Box将包含所有绘制内容。
-        // 如果是反向横屏，我们通过 graphicsLayer 将这个Box整体旋转180度。
-        // 内部的坐标计算则始终按标准横屏处理。
-        Box(
-            modifier = Modifier
-                .fillMaxSize() // 填充父级 BoxWithConstraints
-                .graphicsLayer(
-                    rotationZ = if (isReverseLandscape) 180f else 0f
-                    // 旋转中心默认为 (0.5f, 0.5f) 即中心点，这对于翻转整个绘制区域是正确的。
-                )
-        ) {
-            if (results != null) {
-                results.forEachIndexed { index, detection ->
-                    val uniqueKey = detection.boundingBox.hashCode() + index
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val isDisplayReverseLandscape = displayRotation == Surface.ROTATION_270
 
-                    key(uniqueKey) {
-                        if (detection.categories.isNotEmpty()) {
-                            val topCategory = detection.categories[0]
-                            val normalizedLabel = topCategory.label.lowercase().trim()
+            Log.d(overlayTag, "----- Canvas Redraw -----")
+            Log.d(overlayTag, "Props: displayRotation=$displayRotation, sourceImgRotDeg=$sourceImageRotationDegrees, modelW=$imageWidthFromModel, modelH=$imageHeightFromModel")
+            Log.d(overlayTag, "Canvas Dims: canvasW=${canvasWidthPx}, canvasH=${canvasHeightPx}")
+            Log.d(overlayTag, "PreviewContent Dims: actualW=${actualPreviewContentWidthPx}, actualH=${actualPreviewContentHeightPx}")
+            Log.d(overlayTag, "Offsets: offsetX=${offsetXForPreviewCenter}, offsetY=${offsetYForPreviewCenter}")
+            Log.d(overlayTag, "Transform: isDisplayReverseLandscape=$isDisplayReverseLandscape")
 
-                            val isPerson = personLabels.contains(normalizedLabel)
-                            val isVehicle = vehicleLabels.any { vehicleLabel -> normalizedLabel.contains(vehicleLabel) }
+            withTransform({
+                if (isDisplayReverseLandscape) {
+                    rotate(degrees = 180f, pivot = this.center)
+                }
+            }) {
+                results?.forEachIndexed { index, detection ->
+                    if (detection.categories.isEmpty()) return@forEachIndexed
+                    val topCategory = detection.categories[0]
+                    val normalizedLabel = topCategory.label.lowercase().trim()
 
-                            if (isPerson || isVehicle) {
-                                val boundingBox: RectF = detection.boundingBox
+                    val isPerson = personLabels.contains(normalizedLabel)
+                    val isVehicle = vehicleLabels.any { vl -> normalizedLabel.contains(vl) }
+                    val boxColor = if (isPerson) boxColorPerson else if (isVehicle) boxColorVehicle else return@forEachIndexed
 
-                                // --- 修改: 移除之前根据 isReverseLandscape 判断的 effectiveBoxLeft/Top 逻辑 ---
-                                // 坐标直接从 boundingBox 获取，因为父 Box 的 graphicsLayer 会处理整体的180度旋转（如果需要）。
-                                val boxLeftOnImage = boundingBox.left
-                                val boxTopOnImage = boundingBox.top
-                                val boxWidthOnImage = boundingBox.width()
-                                val boxHeightOnImage = boundingBox.height()
+                    val boundingBoxModel: RectF = detection.boundingBox
 
-                                // 将图像上的坐标映射到画布上（已考虑缩放和居中偏移）
-                                val targetBoxLeftPx = boxLeftOnImage * scale + transformOffsetX
-                                val targetBoxTopPx = boxTopOnImage * scale + transformOffsetY
-                                val targetBoxWidthPx = boxWidthOnImage * scale
-                                val targetBoxHeightPx = boxHeightOnImage * scale
-                                /*
-                                // 详细调试日志
-                                Log.d("ResultsOverlay(TFLite)", "绘制对象: ${topCategory.label} " +
-                                        "| isReverse(gfxLayer): $isReverseLandscape " +
-                                        "| Orig TL: (${boundingBox.left}, ${boundingBox.top}), W: ${boxWidthOnImage}, H: ${boxHeightOnImage} " +
-                                        "| Scale: $scale, tX: $transformOffsetX, tY: $transformOffsetY " +
-                                        "| Canvas TL: (${targetBoxLeftPx.roundToInt()}, ${targetBoxTopPx.roundToInt()}) " +
-                                        "| Canvas Dim: (${targetBoxWidthPx.roundToInt()}w x ${targetBoxHeightPx.roundToInt()}h)")
-                                */
+                    var tempLeft = boundingBoxModel.left
+                    var tempTop = boundingBoxModel.top
+                    var tempRight = boundingBoxModel.right
+                    var tempBottom = boundingBoxModel.bottom
 
-                                if (targetBoxWidthPx <= 0 || targetBoxHeightPx <= 0) {
-                                    Log.w("ResultsOverlay(TFLite)", "计算得到的检测框尺寸无效 (<=0): W=$targetBoxWidthPx, H=$targetBoxHeightPx. 跳过绘制此框。") // 中文日志
-                                } else {
-                                    val boxWidthDp: Dp = with(LocalDensity.current) { targetBoxWidthPx.toDp() }
-                                    val boxHeightDp: Dp = with(LocalDensity.current) { targetBoxHeightPx.toDp() }
+                    // 当源图像为模型旋转了180度时，模型的坐标系相对于“正向”场景是完全颠倒的。
+                    // 我们需要将这些坐标“翻转”回来，以匹配 PreviewView 中用户看到的正向图像。
+                    if (sourceImageRotationDegrees == 180) {
+                        if (index == 0) { // 仅为第一个检测框打印一次这个特定日志
+                            Log.d(overlayTag, "Applying 180-deg coordinate un-flip for model BBox. Original LTRB: $tempLeft, $tempTop, $tempRight, $tempBottom")
+                        }
+                        tempLeft = imageWidthFromModel - boundingBoxModel.right
+                        tempTop = imageHeightFromModel - boundingBoxModel.bottom
+                        tempRight = imageWidthFromModel - boundingBoxModel.left
+                        tempBottom = imageHeightFromModel - boundingBoxModel.top
+                        if (index == 0) {
+                            Log.d(overlayTag, "Un-flipped BBox LTRB: $tempLeft, $tempTop, $tempRight, $tempBottom")
+                        }
+                    }
+                    // 注意: 如果未来 sourceImageRotationDegrees 可能为 90 或 270，
+                    // 并且 imageWidthFromModel/imageHeightFromModel 会相应地交换值 (例如模型输入变成 480x640),
+                    // 那么这里也需要类似地处理 90/270 度旋转带来的坐标系变换。
+                    // 当前日志显示，对于0度和180度的 sourceImageRotationDegrees，模型输入尺寸(imageWidthFromModel, imageHeightFromModel)始终是640x480。
 
-                                    if (boxWidthDp > 0.dp && boxHeightDp > 0.dp) {
-                                        // 绘制边界框
-                                        Box(
-                                            modifier = Modifier
-                                                .offset {
-                                                    IntOffset(
-                                                        targetBoxLeftPx.roundToInt(),
-                                                        targetBoxTopPx.roundToInt()
-                                                    )
-                                                }
-                                                .size(width = boxWidthDp, height = boxHeightDp)
-                                                .border(2.dp, Color.Green)
-                                        )
+                    val modelRectLeft = tempLeft
+                    val modelRectTop = tempTop
+                    val modelRectRight = tempRight
+                    val modelRectBottom = tempBottom
 
-                                        // 绘制标签文本
-                                        val labelText = "${topCategory.label} (${String.format("%.2f", topCategory.score)})"
-                                        Box(
-                                            modifier = Modifier
-                                                .offset {
-                                                    IntOffset(
-                                                        targetBoxLeftPx.roundToInt(),
-                                                        targetBoxTopPx.roundToInt() // 文本锚点与框的锚点一致
-                                                    )
-                                                }
-                                                .background(Color.Green.copy(alpha = 0.7f))
-                                                .padding(horizontal = 4.dp, vertical = 2.dp)
-                                        ) {
-                                            Text(
-                                                text = labelText,
-                                                color = Color.White,
-                                                fontSize = 10.sp,
-                                                maxLines = 1
-                                            )
-                                        }
-                                    }
-                                }
+                    val scaleToPreviewX = actualPreviewContentWidthPx / imageWidthFromModel.toFloat()
+                    val scaleToPreviewY = actualPreviewContentHeightPx / imageHeightFromModel.toFloat()
+
+                    val finalLeft = modelRectLeft * scaleToPreviewX + offsetXForPreviewCenter
+                    val finalTop = modelRectTop * scaleToPreviewY + offsetYForPreviewCenter
+                    val finalRight = modelRectRight * scaleToPreviewX + offsetXForPreviewCenter
+                    val finalBottom = modelRectBottom * scaleToPreviewY + offsetYForPreviewCenter
+
+                    val rectWidth = finalRight - finalLeft
+                    val rectHeight = finalBottom - finalTop
+
+                    if (index == 0) {
+                        Log.d(overlayTag, "Detection[0]: Label='${topCategory.label}', Score=${topCategory.score}")
+                        Log.d(overlayTag, "Detection[0] (potentially un-flipped) BBoxModel: L=${modelRectLeft}, T=${modelRectTop}, R=${modelRectRight}, B=${modelRectBottom}")
+                        Log.d(overlayTag, "Detection[0] Scales: scaleX=${scaleToPreviewX}, scaleY=${scaleToPreviewY}")
+                        Log.d(overlayTag, "Detection[0] FinalCoords: L=${finalLeft}, T=${finalTop}, R=${finalRight}, B=${finalBottom}")
+                        Log.d(overlayTag, "Detection[0] FinalDims: W=${rectWidth}, H=${rectHeight}")
+                    }
+
+                    if (rectWidth > 0 && rectHeight > 0) {
+                        drawRect(
+                            color = boxColor,
+                            topLeft = Offset(finalLeft, finalTop),
+                            size = Size(rectWidth, rectHeight),
+                            style = Stroke(width = strokeWidth.toPx())
+                        )
+
+                        val labelText = "${topCategory.label} (${String.format("%.1f", topCategory.score * 100)}%)"
+                        val textStyle = TextStyle(
+                            color = labelTextColor,
+                            fontSize = 12.sp,
+                            background = labelBackgroundColor
+                        )
+                        val textLayoutResult: TextLayoutResult = textMeasurer.measure(
+                            text = AnnotatedString(labelText),
+                            style = textStyle,
+                            constraints = Constraints(maxWidth = (rectWidth - 2 * textPadding.toPx()).toInt().coerceAtLeast(0))
+                        )
+                        val textWidth = textLayoutResult.size.width
+                        val textHeight = textLayoutResult.size.height
+
+                        var textDrawX = finalLeft + textPadding.toPx()
+                        var textDrawY = finalTop + textPadding.toPx()
+
+                        if (textDrawX + textWidth > finalRight - textPadding.toPx()) {
+                            textDrawX = finalRight - textWidth - textPadding.toPx()
+                        }
+                        if (textDrawY + textHeight > finalBottom - textPadding.toPx()) {
+                            textDrawY = finalBottom - textHeight - textPadding.toPx()
+                        }
+                        textDrawX = textDrawX.coerceAtLeast(finalLeft + textPadding.toPx())
+                        textDrawY = textDrawY.coerceAtLeast(finalTop + textPadding.toPx())
+
+                        if (isDisplayReverseLandscape) {
+                            withTransform({
+                                rotate(degrees = 180f, pivot = Offset(textDrawX + textWidth / 2f, textDrawY + textHeight / 2f))
+                            }) {
+                                drawText(
+                                    textLayoutResult = textLayoutResult,
+                                    topLeft = Offset(textDrawX, textDrawY)
+                                )
                             }
+                        } else {
+                            drawText(
+                                textLayoutResult = textLayoutResult,
+                                topLeft = Offset(textDrawX, textDrawY)
+                            )
                         }
                     }
                 }
