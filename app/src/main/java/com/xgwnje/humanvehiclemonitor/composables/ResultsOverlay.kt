@@ -37,7 +37,7 @@ fun ResultsOverlay(
     vehicleLabels: Set<String>,
     modifier: Modifier = Modifier
 ) {
-    val overlayTag = "ResultsOverlay(MirrorFix)" // 更新 Tag
+    val overlayTag = "ResultsOverlay(CoordFix)" // 更新 Tag 以反映修复内容
 
     if (imageHeightFromModel == 0 || imageWidthFromModel == 0) {
         Log.w(overlayTag, "模型图像高度或宽度为零。 H:$imageHeightFromModel, W:$imageWidthFromModel")
@@ -66,39 +66,41 @@ fun ResultsOverlay(
             return@BoxWithConstraints
         }
 
-        val previewViewAspectRatio = canvasWidthPx / canvasHeightPx
-        val cameraContentAspectRatio = 4.0f / 3.0f
+        val contentAspectRatioToDisplay = imageWidthFromModel.toFloat() / imageHeightFromModel.toFloat()
+        val canvasAspectRatio = canvasWidthPx / canvasHeightPx
 
         val actualPreviewContentWidthPx: Float
         val actualPreviewContentHeightPx: Float
         val offsetXForPreviewCenter: Float
         val offsetYForPreviewCenter: Float
 
-        if (previewViewAspectRatio > cameraContentAspectRatio) {
+        if (canvasAspectRatio > contentAspectRatioToDisplay) {
             actualPreviewContentHeightPx = canvasHeightPx
-            actualPreviewContentWidthPx = actualPreviewContentHeightPx * cameraContentAspectRatio
+            actualPreviewContentWidthPx = actualPreviewContentHeightPx * contentAspectRatioToDisplay
             offsetXForPreviewCenter = (canvasWidthPx - actualPreviewContentWidthPx) / 2f
             offsetYForPreviewCenter = 0f
         } else {
             actualPreviewContentWidthPx = canvasWidthPx
-            actualPreviewContentHeightPx = actualPreviewContentWidthPx / cameraContentAspectRatio
+            actualPreviewContentHeightPx = actualPreviewContentWidthPx / contentAspectRatioToDisplay
             offsetXForPreviewCenter = 0f
             offsetYForPreviewCenter = (canvasHeightPx - actualPreviewContentHeightPx) / 2f
         }
-        Log.d(overlayTag, "Canvas: ${canvasWidthPx}x${canvasHeightPx}. Actual 4:3 Preview: ${actualPreviewContentWidthPx}x${actualPreviewContentHeightPx}, Offset: ($offsetXForPreviewCenter,$offsetYForPreviewCenter)")
+
+        Log.d(overlayTag, "Canvas: ${canvasWidthPx}x${canvasHeightPx} (AR: $canvasAspectRatio). Content AR to Display: $contentAspectRatioToDisplay. ActualPreview: ${actualPreviewContentWidthPx}x${actualPreviewContentHeightPx}, Offset: ($offsetXForPreviewCenter,$offsetYForPreviewCenter)")
 
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val isDisplayReverseLandscape = displayRotation == Surface.ROTATION_270
+            val isDisplayPhysicallyFlipped = displayRotation == Surface.ROTATION_180 || displayRotation == Surface.ROTATION_270
 
+            // Log general canvas state
             Log.d(overlayTag, "----- Canvas Redraw -----")
             Log.d(overlayTag, "Props: displayRotation=$displayRotation, sourceImgRotDeg=$sourceImageRotationDegrees, modelW=$imageWidthFromModel, modelH=$imageHeightFromModel")
             Log.d(overlayTag, "Canvas Dims: canvasW=${canvasWidthPx}, canvasH=${canvasHeightPx}")
             Log.d(overlayTag, "PreviewContent Dims: actualW=${actualPreviewContentWidthPx}, actualH=${actualPreviewContentHeightPx}")
             Log.d(overlayTag, "Offsets: offsetX=${offsetXForPreviewCenter}, offsetY=${offsetYForPreviewCenter}")
-            Log.d(overlayTag, "Transform: isDisplayReverseLandscape=$isDisplayReverseLandscape")
+            Log.d(overlayTag, "Transform: isDisplayPhysicallyFlipped=$isDisplayPhysicallyFlipped")
 
             withTransform({
-                if (isDisplayReverseLandscape) {
+                if (isDisplayPhysicallyFlipped) {
                     rotate(degrees = 180f, pivot = this.center)
                 }
             }) {
@@ -113,37 +115,67 @@ fun ResultsOverlay(
 
                     val boundingBoxModel: RectF = detection.boundingBox
 
-                    var tempLeft = boundingBoxModel.left
-                    var tempTop = boundingBoxModel.top
-                    var tempRight = boundingBoxModel.right
-                    var tempBottom = boundingBoxModel.bottom
+                    var mLeft = boundingBoxModel.left
+                    var mTop = boundingBoxModel.top
+                    var mRight = boundingBoxModel.right
+                    var mBottom = boundingBoxModel.bottom
 
-                    // 当源图像为模型旋转了180度时，模型的坐标系相对于“正向”场景是完全颠倒的。
-                    // 我们需要将这些坐标“翻转”回来，以匹配 PreviewView 中用户看到的正向图像。
-                    if (sourceImageRotationDegrees == 180) {
-                        if (index == 0) { // 仅为第一个检测框打印一次这个特定日志
-                            Log.d(overlayTag, "Applying 180-deg coordinate un-flip for model BBox. Original LTRB: $tempLeft, $tempTop, $tempRight, $tempBottom")
+                    // 校正来自模型的、基于旋转后图像的坐标，使其与“视觉正向”的场景对应
+                    // imageWidthFromModel/imageHeightFromModel 是模型实际处理的图像的 W/H
+                    // H_sensor = imageWidthFromModel, W_sensor = imageHeightFromModel (when sourceImageRotationDegrees is 90 or 270)
+                    when (sourceImageRotationDegrees) {
+                        90 -> { // 模型输入图像顺时针旋转了90度
+                            if (index == 0) Log.d(overlayTag, "Applying 90-deg un-rotate. Original LTRB: ${boundingBoxModel.left}, ${boundingBoxModel.top}, ${boundingBoxModel.right}, ${boundingBoxModel.bottom}")
+                            mLeft = boundingBoxModel.top
+                            mTop = imageWidthFromModel - boundingBoxModel.right // imageWidthFromModel is H_sensor
+                            mRight = boundingBoxModel.bottom
+                            mBottom = imageWidthFromModel - boundingBoxModel.left
+                            if (index == 0) Log.d(overlayTag, "Un-rotated for 90 LTRB: $mLeft, $mTop, $mRight, $mBottom")
                         }
-                        tempLeft = imageWidthFromModel - boundingBoxModel.right
-                        tempTop = imageHeightFromModel - boundingBoxModel.bottom
-                        tempRight = imageWidthFromModel - boundingBoxModel.left
-                        tempBottom = imageHeightFromModel - boundingBoxModel.top
-                        if (index == 0) {
-                            Log.d(overlayTag, "Un-flipped BBox LTRB: $tempLeft, $tempTop, $tempRight, $tempBottom")
+                        180 -> { // 模型输入图像顺时针旋转了180度
+                            if (index == 0) Log.d(overlayTag, "Applying 180-deg un-rotate. Original LTRB: ${boundingBoxModel.left}, ${boundingBoxModel.top}, ${boundingBoxModel.right}, ${boundingBoxModel.bottom}")
+                            mLeft = imageWidthFromModel - boundingBoxModel.right
+                            mTop = imageHeightFromModel - boundingBoxModel.bottom
+                            mRight = imageWidthFromModel - boundingBoxModel.left
+                            mBottom = imageHeightFromModel - boundingBoxModel.top
+                            if (index == 0) Log.d(overlayTag, "Un-rotated for 180 LTRB: $mLeft, $mTop, $mRight, $mBottom")
                         }
+                        270 -> { // 模型输入图像顺时针旋转了270度
+                            if (index == 0) Log.d(overlayTag, "Applying 270-deg un-rotate. Original LTRB: ${boundingBoxModel.left}, ${boundingBoxModel.top}, ${boundingBoxModel.right}, ${boundingBoxModel.bottom}")
+                            mLeft = imageHeightFromModel - boundingBoxModel.bottom // imageHeightFromModel is W_sensor
+                            mTop = boundingBoxModel.left
+                            mRight = imageHeightFromModel - boundingBoxModel.top
+                            mBottom = boundingBoxModel.right
+                            if (index == 0) Log.d(overlayTag, "Un-rotated for 270 LTRB: $mLeft, $mTop, $mRight, $mBottom")
+                        }
+                        // 0 degrees: no coordinate transformation needed for un-rotation
                     }
-                    // 注意: 如果未来 sourceImageRotationDegrees 可能为 90 或 270，
-                    // 并且 imageWidthFromModel/imageHeightFromModel 会相应地交换值 (例如模型输入变成 480x640),
-                    // 那么这里也需要类似地处理 90/270 度旋转带来的坐标系变换。
-                    // 当前日志显示，对于0度和180度的 sourceImageRotationDegrees，模型输入尺寸(imageWidthFromModel, imageHeightFromModel)始终是640x480。
 
-                    val modelRectLeft = tempLeft
-                    val modelRectTop = tempTop
-                    val modelRectRight = tempRight
-                    val modelRectBottom = tempBottom
+                    val modelRectLeft = mLeft
+                    val modelRectTop = mTop
+                    val modelRectRight = mRight
+                    val modelRectBottom = mBottom
 
-                    val scaleToPreviewX = actualPreviewContentWidthPx / imageWidthFromModel.toFloat()
-                    val scaleToPreviewY = actualPreviewContentHeightPx / imageHeightFromModel.toFloat()
+                    val scaleInputWidth: Float
+                    val scaleInputHeight: Float
+
+                    if (sourceImageRotationDegrees == 90 || sourceImageRotationDegrees == 270) {
+                        // "反正"后的坐标 modelRectLeft/Top 等，其概念上的"宽度范围"是原始传感器的宽度 (imageHeightFromModel)
+                        // 其概念上的"高度范围"是原始传感器的高度 (imageWidthFromModel)
+                        scaleInputWidth = imageHeightFromModel.toFloat() // Original Sensor Width
+                        scaleInputHeight = imageWidthFromModel.toFloat()  // Original Sensor Height
+                    } else { // 0 or 180 degrees
+                        scaleInputWidth = imageWidthFromModel.toFloat()
+                        scaleInputHeight = imageHeightFromModel.toFloat()
+                    }
+
+                    if (scaleInputWidth == 0f || scaleInputHeight == 0f) {
+                        Log.e(overlayTag, "Error: scaleInputWidth or scaleInputHeight is zero. Skipping draw for this detection.")
+                        return@forEachIndexed
+                    }
+
+                    val scaleToPreviewX = actualPreviewContentWidthPx / scaleInputWidth
+                    val scaleToPreviewY = actualPreviewContentHeightPx / scaleInputHeight
 
                     val finalLeft = modelRectLeft * scaleToPreviewX + offsetXForPreviewCenter
                     val finalTop = modelRectTop * scaleToPreviewY + offsetYForPreviewCenter
@@ -155,7 +187,8 @@ fun ResultsOverlay(
 
                     if (index == 0) {
                         Log.d(overlayTag, "Detection[0]: Label='${topCategory.label}', Score=${topCategory.score}")
-                        Log.d(overlayTag, "Detection[0] (potentially un-flipped) BBoxModel: L=${modelRectLeft}, T=${modelRectTop}, R=${modelRectRight}, B=${modelRectBottom}")
+                        Log.d(overlayTag, "Detection[0] (un-rotated & used for scaling) BBoxModel: L=${modelRectLeft}, T=${modelRectTop}, R=${modelRectRight}, B=${modelRectBottom}")
+                        Log.d(overlayTag, "Detection[0] Scale Denominators: W=${scaleInputWidth}, H=${scaleInputHeight}")
                         Log.d(overlayTag, "Detection[0] Scales: scaleX=${scaleToPreviewX}, scaleY=${scaleToPreviewY}")
                         Log.d(overlayTag, "Detection[0] FinalCoords: L=${finalLeft}, T=${finalTop}, R=${finalRight}, B=${finalBottom}")
                         Log.d(overlayTag, "Detection[0] FinalDims: W=${rectWidth}, H=${rectHeight}")
@@ -195,7 +228,7 @@ fun ResultsOverlay(
                         textDrawX = textDrawX.coerceAtLeast(finalLeft + textPadding.toPx())
                         textDrawY = textDrawY.coerceAtLeast(finalTop + textPadding.toPx())
 
-                        if (isDisplayReverseLandscape) {
+                        if (isDisplayPhysicallyFlipped) {
                             withTransform({
                                 rotate(degrees = 180f, pivot = Offset(textDrawX + textWidth / 2f, textDrawY + textHeight / 2f))
                             }) {

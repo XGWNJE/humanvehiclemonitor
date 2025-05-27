@@ -2,8 +2,9 @@
 package com.xgwnje.humanvehiclemonitor
 
 import android.util.Log
+import android.view.Surface
 import android.view.ViewGroup
-import androidx.camera.core.AspectRatio
+import androidx.camera.core.AspectRatio // 如果您决定不使用 setTargetAspectRatio，此导入可以移除
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
@@ -16,6 +17,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -51,7 +55,7 @@ fun CameraView(
     }
 
     val localView = LocalView.current
-    val currentDisplayRotationKey = localView.display.rotation
+    val currentDisplayRotationKey = localView.display.rotation // Surface.ROTATION_0, _90, _180, _270
 
     Log.i(cameraViewTag, "CameraView: Composable 开始/重组。isPreviewEnabled: $isPreviewEnabled, currentDisplayRotationKey: $currentDisplayRotationKey")
 
@@ -66,9 +70,11 @@ fun CameraView(
         }
     }
 
-    BoxWithConstraints(modifier = modifier) { // Line ~70, BoxWithConstraints scope starts
+    var lastLoggedProxyRotation by remember { mutableIntStateOf(-1) }
+
+    @Suppress("BoxWithConstraintsScopeNotUsed")
+    BoxWithConstraints(modifier = modifier) {
         val density = LocalDensity.current
-        // 这些是从 BoxWithConstraints 作用域获取的 Dp 值
         val containerMaxWidthDp = maxWidth
         val containerMaxHeightDp = maxHeight
 
@@ -77,24 +83,30 @@ fun CameraView(
         val maxWidthPx = with(density) { containerMaxWidthDp.toPx() }
         val maxHeightPx = with(density) { containerMaxHeightDp.toPx() }
 
-        val targetAspectRatio = 4.0f / 3.0f // 修复: 定义 targetAspectRatio
+        // 根据当前屏幕方向动态确定 PreviewView 的目标宽高比
+        // 0 (竖屏) 和 180 (反向竖屏) 使用 3:4 (高宽比4:3)
+        // 90 (横屏) 和 270 (反向横屏) 使用 4:3 (高宽比3:4)
+        val targetDisplayAspectRatio = when (currentDisplayRotationKey) {
+            Surface.ROTATION_0, Surface.ROTATION_180 -> 3.0f / 4.0f // 竖屏内容，宽高比 W/H = 3/4
+            else -> 4.0f / 3.0f // 横屏内容，宽高比 W/H = 4/3
+        }
+        Log.d(cameraViewTag, "Calculated targetDisplayAspectRatio for PreviewView sizing: $targetDisplayAspectRatio (rotation: $currentDisplayRotationKey)")
 
         var previewWidthPx: Float
         var previewHeightPx: Float
 
-        // 根据容器尺寸和目标宽高比计算预览实际像素尺寸
-        if (maxWidthPx / maxHeightPx > targetAspectRatio) {
+        // FIT_CENTER 逻辑，根据动态的 targetDisplayAspectRatio 来计算 PreviewView 的尺寸
+        if (maxWidthPx / maxHeightPx > targetDisplayAspectRatio) { // 容器比目标内容更“宽” -> pillarbox (上下填满)
             previewHeightPx = maxHeightPx
-            previewWidthPx = previewHeightPx * targetAspectRatio
-        } else {
+            previewWidthPx = previewHeightPx * targetDisplayAspectRatio
+        } else { // 容器比目标内容更“高”或等宽 -> letterbox (左右填满)
             previewWidthPx = maxWidthPx
-            previewHeightPx = previewWidthPx / targetAspectRatio
+            previewHeightPx = previewWidthPx / targetDisplayAspectRatio
         }
 
         val previewWidthDp = with(density) { previewWidthPx.toDp() }
         val previewHeightDp = with(density) { previewHeightPx.toDp() }
 
-        // 下面这行日志大约在第89行，关于冗余花括号的警告可以暂时忽略，不影响功能
         Log.d(cameraViewTag, "计算得到的 PreviewView 尺寸: ${previewWidthDp}dp x ${previewHeightDp}dp (基于容器 Dp: ${containerMaxWidthDp} x ${containerMaxHeightDp})")
 
         LaunchedEffect(
@@ -105,6 +117,8 @@ fun CameraView(
         ) {
             val targetRotationForUseCase = currentDisplayRotationKey
             Log.i(cameraViewTag, "LaunchedEffect: RE-RUNNING. isPreviewEnabled: $isPreviewEnabled, targetRotationForUseCase: $targetRotationForUseCase")
+            lastLoggedProxyRotation = -1
+
 
             val cameraProvider: ProcessCameraProvider
             try {
@@ -131,8 +145,7 @@ fun CameraView(
 
                 if (isPreviewEnabled) {
                     val preview = Preview.Builder()
-                        // 下面这行 setTargetAspectRatio 方法被标记为 deprecated (弃用)，但不影响编译和当前功能
-                        .setTargetAspectRatio(AspectRatio.RATIO_4_3) // Line ~126
+                        // .setTargetAspectRatio(AspectRatio.RATIO_4_3) // 移除或注释掉，让CameraX根据Surface和targetRotation选择
                         .setTargetRotation(targetRotationForUseCase)
                         .build()
                         .also {
@@ -146,8 +159,7 @@ fun CameraView(
                 }
 
                 val imageAnalyzer = ImageAnalysis.Builder()
-                    // 下面这行 setTargetAspectRatio 方法被标记为 deprecated (弃用)，但不影响编译和当前功能
-                    .setTargetAspectRatio(AspectRatio.RATIO_4_3) // Line ~140
+                    // .setTargetAspectRatio(AspectRatio.RATIO_4_3) // 移除或注释掉
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
                     .setTargetRotation(targetRotationForUseCase)
@@ -155,8 +167,13 @@ fun CameraView(
                     .also {
                         Log.d(cameraViewTag, "LaunchedEffect: ImageAnalysis UseCase 构建完成。目标旋转: $targetRotationForUseCase。")
                         it.setAnalyzer(imageAnalysisExecutor) { imageProxy ->
+                            val currentProxyRotation = imageProxy.imageInfo.rotationDegrees
+                            if (currentProxyRotation != lastLoggedProxyRotation) {
+                                Log.d(cameraViewTag, "ImageAnalysis - imageProxy rotation CHANGED to: $currentProxyRotation (was: $lastLoggedProxyRotation)")
+                                lastLoggedProxyRotation = currentProxyRotation
+                            }
+
                             if (!objectDetectorHelper.isClosed()) {
-                                Log.d(cameraViewTag, "ImageAnalysis - imageProxy rotation: ${imageProxy.imageInfo.rotationDegrees}")
                                 objectDetectorHelper.detectLivestreamFrame(imageProxy)
                             } else {
                                 imageProxy.close()
@@ -210,7 +227,7 @@ fun CameraView(
         AndroidView(
             factory = { previewView },
             modifier = Modifier
-                .size(width = previewWidthDp, height = previewHeightDp)
+                .size(width = previewWidthDp, height = previewHeightDp) // 使用动态计算的尺寸
                 .align(Alignment.Center),
             update = { /* view -> Log.d(cameraViewTag, "AndroidView update.") */ }
         )
